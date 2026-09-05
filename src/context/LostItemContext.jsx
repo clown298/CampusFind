@@ -73,8 +73,23 @@ function ensureLostItemsSeeded() {
     return savedItems ? JSON.parse(savedItems) : [];
   }
 
-  localStorage.setItem("lostItems", JSON.stringify(DEMO_LOST_ITEMS));
+  try {
+    localStorage.setItem("lostItems", JSON.stringify(DEMO_LOST_ITEMS));
+  } catch (_) {}
   return DEMO_LOST_ITEMS;
+}
+
+function isQuotaError(err) {
+  if (!err) return false;
+  if (typeof err === "object" && typeof err.name === "string") {
+    if (err.name === "QuotaExceededError" || err.name === "NS_ERROR_DOM_QUOTA_REACHED") {
+      return true;
+    }
+  }
+  const msg = String(err && err.message ? err.message : err);
+  return /quota|quota exceeded|storage full|not enough space|NS_ERROR_DOM_QUOTA/i.test(
+    msg
+  );
 }
 
 function LostItemProvider({ children }) {
@@ -83,10 +98,65 @@ function LostItemProvider({ children }) {
     return ensureLostItemsSeeded();
   });
 
+  const [persistenceError, setPersistenceError] = useState(null);
+
+  function dismissPersistenceError() {
+    setPersistenceError(null);
+  }
+
   useEffect(() => {
-    localStorage.setItem("lostItems", JSON.stringify(lostItems));
-    if (!localStorage.getItem(SEED_FLAG)) {
-      localStorage.setItem(SEED_FLAG, "1");
+    let serialized;
+    try {
+      serialized = JSON.stringify(lostItems);
+    } catch (err) {
+      console.error(
+        "[LostItemContext] Failed to serialize lostItems for persistence:",
+        err
+      );
+      setPersistenceError(
+        "Lost items could not be prepared for permanent storage. " +
+          "Your changes are visible for this session but may be lost if you refresh. " +
+          "Please try again or remove very large images from your reports."
+      );
+      return;
+    }
+
+    const approxKB = Math.ceil(serialized.length / 1024);
+
+    try {
+      localStorage.setItem("lostItems", serialized);
+
+      if (!localStorage.getItem(SEED_FLAG)) {
+        try {
+          localStorage.setItem(SEED_FLAG, "1");
+        } catch (seedErr) {
+          console.error(
+            "[LostItemContext] Failed to write seed flag after data persisted:",
+            seedErr
+          );
+        }
+      }
+
+      setPersistenceError(null);
+    } catch (err) {
+      console.error(
+        "[LostItemContext] LocalStorage persistence failed for lostItems:",
+        err
+      );
+
+      if (isQuotaError(err)) {
+        setPersistenceError(
+          `Browser storage is full (~${approxKB} KB needed for lost items). ` +
+            "Your lost-item reports and photos are shown now but WILL BE LOST if you refresh this page. " +
+            "To fix: delete old lost items or remove large attached photos, then try again."
+        );
+      } else {
+        setPersistenceError(
+          "Lost items could not be saved to permanent browser storage. " +
+            "Your changes are visible for this session only. " +
+            "Please try again — if this keeps happening, private/incognito or blocked storage may be the cause."
+        );
+      }
     }
   }, [lostItems]);
 
@@ -111,6 +181,8 @@ function LostItemProvider({ children }) {
         setLostItems,
         deleteLostItem,
         updateLostItem,
+        persistenceError,
+        dismissPersistenceError,
       }}
     >
       {children}

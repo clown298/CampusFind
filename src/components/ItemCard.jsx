@@ -98,6 +98,15 @@ function ItemCard({ type, item, onUpdate, onDelete }) {
         </form>
       ) : (
         <>
+          {item.imageData && (
+            <div className="mb-4 -mx-5 -mt-5 overflow-hidden rounded-t-[8px] border-b border-line bg-ink/5 aspect-[4/3]">
+              <img
+                src={item.imageData}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            </div>
+          )}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span
               className={`inline-flex rounded-[4px] border px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.08em] ${badgeClass}`}

@@ -13,8 +13,25 @@ const CATEGORIES = [
   "Other",
 ];
 
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const ALLOWED_IMAGE_EXT = /\.(jpe?g|png|webp)$/i;
+const MAX_IMAGE_BYTES = 500 * 1024;
+
 const required = (value) =>
   value && typeof value === "string" ? value.trim().length > 0 : false;
+
+function validateImageFile(file) {
+  if (!file) return null;
+  const nameOk = ALLOWED_IMAGE_EXT.test(file.name || "");
+  const typeOk = !file.type || ALLOWED_IMAGE_TYPES.includes(file.type);
+  if (!nameOk && !typeOk) {
+    return "Only JPEG, PNG, and WebP images are allowed.";
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    return "Image must be smaller than 500 KB.";
+  }
+  return null;
+}
 
 function validateForm(data) {
   const errors = {};
@@ -63,6 +80,7 @@ function ReportFound() {
     location: "",
     dateFound: "",
     contact: "",
+    imageData: undefined,
   });
 
   const [errors, setErrors] = useState({});
@@ -89,6 +107,45 @@ function ReportFound() {
     });
 
     setSubmissionError("");
+  }
+
+  function handleImageChange(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      setErrors((prev) => ({ ...prev, image: validationError }));
+      setFormData((prev) => ({ ...prev, imageData: undefined }));
+      if (e.target) e.target.value = "";
+      return;
+    }
+
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next.image;
+      return next;
+    });
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setFormData((prev) => ({ ...prev, imageData: String(reader.result || "") }));
+    };
+    reader.onerror = () => {
+      setErrors((prev) => ({ ...prev, image: "Could not read the image file." }));
+    };
+    reader.readAsDataURL(file);
+    if (e.target) e.target.value = "";
+  }
+
+  function handleClearImage(e) {
+    if (e) e.preventDefault();
+    setFormData((prev) => ({ ...prev, imageData: undefined }));
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next.image;
+      return next;
+    });
   }
 
   function handleSubmit(e) {
@@ -124,6 +181,7 @@ function ReportFound() {
         location: "",
         dateFound: "",
         contact: "",
+        imageData: undefined,
       });
 
       setErrors({});
@@ -459,6 +517,90 @@ function ReportFound() {
                 >
                   {errors.contact}
                 </p>
+              )}
+            </div>
+
+            <div>
+              <label
+                htmlFor="found-image"
+                className="mb-1.5 block text-sm font-semibold text-ink"
+              >
+                Photo (optional)
+              </label>
+              {formData.imageData ? (
+                <div className="rounded-[6px] border border-line bg-paper p-3">
+                  <div className="overflow-hidden rounded-[4px] border border-line bg-surface">
+                    <img
+                      src={formData.imageData}
+                      alt=""
+                      className="h-56 w-full object-contain bg-ink/5"
+                    />
+                  </div>
+                  <div className="mt-3 flex flex-col-reverse items-stretch gap-2 sm:flex-row sm:justify-between">
+                    <p className="text-xs text-mute">
+                      Photo will be saved with your report.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleClearImage}
+                      className="inline-flex min-h-[36px] items-center justify-center rounded-[4px] border border-line bg-surface px-3 text-xs font-semibold text-ink transition-colors duration-150 hover:border-mute/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+                    >
+                      Remove photo
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label
+                    htmlFor="found-image"
+                    className={`flex min-h-[120px] cursor-pointer flex-col items-center justify-center gap-2 rounded-[6px] border border-dashed px-4 py-6 text-center transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
+                      errors.image
+                        ? "border-lost bg-lost/5"
+                        : "border-line bg-surface hover:border-mute/50"
+                    }`}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className={`h-6 w-6 ${errors.image ? "text-lost" : "text-mute"}`}
+                      aria-hidden="true"
+                    >
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                      <circle cx="8.5" cy="8.5" r="1.5" />
+                      <polyline points="21 15 16 10 5 21" />
+                    </svg>
+                    <div>
+                      <p className={`text-sm font-semibold ${errors.image ? "text-lost" : "text-ink"}`}>
+                        {errors.image ? errors.image : "Click to choose a photo"}
+                      </p>
+                      <p className="mt-1 text-xs text-mute">
+                        JPEG, PNG, or WebP. Maximum 500 KB.
+                      </p>
+                    </div>
+                  </label>
+                  <input
+                    id="found-image"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleImageChange}
+                    aria-invalid={errors.image ? "true" : "false"}
+                    aria-describedby={errors.image ? "found-image-error" : undefined}
+                    className="sr-only"
+                  />
+                  {errors.image && (
+                    <p
+                      id="found-image-error"
+                      className="mt-1.5 text-sm font-medium text-lost"
+                    >
+                      {errors.image}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           </div>
