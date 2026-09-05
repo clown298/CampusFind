@@ -21,36 +21,57 @@ function ItemCard({ type, item, onUpdate, onDelete }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [itemName, setItemName] = useState(displayName);
   const [category, setCategory] = useState(item.category || "");
+  const [error, setError] = useState(null);
 
   function startEditing() {
     setConfirmingDelete(false);
+    setError(null);
     setItemName(getItemName(item));
     setCategory(item.category || "");
     setEditing(true);
   }
 
-  function handleSave() {
-    onUpdate({
-      ...item,
-      itemName,
-      category,
-    });
-    setEditing(false);
+  async function handleSave() {
+    setError(null);
+    try {
+      await onUpdate({
+        ...item,
+        itemName,
+        category,
+      });
+      setEditing(false);
+    } catch (err) {
+      console.error("Error updating item:", err);
+      setError(
+        (err && err.message) || "Could not update the item. Please try again."
+      );
+    }
   }
 
   function handleCancelEdit() {
+    setError(null);
     setItemName(getItemName(item));
     setCategory(item.category || "");
     setEditing(false);
   }
 
   function handleCancelDelete() {
+    setError(null);
     setConfirmingDelete(false);
   }
 
-  function handleConfirmDelete() {
-    onDelete(item.id);
-    setConfirmingDelete(false);
+  async function handleConfirmDelete() {
+    setError(null);
+    try {
+      await onDelete(item.id);
+      setConfirmingDelete(false);
+    } catch (err) {
+      console.error("Error deleting item:", err);
+      setError(
+        (err && err.message) || "Could not delete the item. Please try again."
+      );
+      setConfirmingDelete(false);
+    }
   }
 
   return (
@@ -86,6 +107,12 @@ function ItemCard({ type, item, onUpdate, onDelete }) {
               className="mt-2 h-11 w-full rounded-[6px] border border-line bg-paper px-3 text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
             />
           </label>
+
+          {error && (
+            <p className="mt-3 rounded-[4px] border border-lost/30 bg-lost/10 p-3 text-sm font-medium text-lost">
+              {error}
+            </p>
+          )}
 
           <div className="flex flex-wrap gap-3 pt-2">
             <Button type="submit" variant="save">
@@ -164,6 +191,12 @@ function ItemCard({ type, item, onUpdate, onDelete }) {
                   Cancel
                 </Button>
               </div>
+
+              {error && (
+                <p className="mt-3 rounded-[4px] border border-lost/30 bg-lost/10 p-3 text-sm font-medium text-lost">
+                  {error}
+                </p>
+              )}
             </div>
           ) : (
             <div className="mt-5 flex flex-wrap gap-3">

@@ -36,6 +36,20 @@ function validateImageFile(file) {
   return null;
 }
 
+function toDateInputValue(rawDate) {
+  if (!rawDate) return "";
+  const m = String(rawDate).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  const parsed = new Date(rawDate);
+  if (!Number.isNaN(parsed.getTime())) {
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, "0");
+    const day = String(parsed.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+  return "";
+}
+
 function validateForm(data) {
   const errors = {};
 
@@ -117,6 +131,7 @@ function ItemDetails({ type }) {
   const updateItem = isFound
     ? foundCtx.updateFoundItem
     : lostCtx.updateLostItem;
+  const isLoading = isFound ? foundCtx.isLoading : lostCtx.isLoading;
 
   const item = useMemo(() => {
     const found = items.find((i) => String(i.id) === String(id));
@@ -126,13 +141,18 @@ function ItemDetails({ type }) {
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [errors, setErrors] = useState({});
+  const [actionError, setActionError] = useState(null);
 
   const [itemName, setItemName] = useState(item ? getItemName(item) : "");
   const [category, setCategory] = useState(item?.category || "");
   const [description, setDescription] = useState(item?.description || "");
   const [location, setLocation] = useState(item?.location || "");
   const [dateField, setDateField] = useState(
-    item ? (item.dateFound || item.dateLost || item.date_found || item.date_lost || "") : ""
+    item
+      ? toDateInputValue(
+          item.dateFound || item.dateLost || item.date_found || item.date_lost || ""
+        )
+      : ""
   );
   const [contact, setContact] = useState(item?.contact || "");
   const [imageData, setImageData] = useState(item?.imageData || undefined);
@@ -179,16 +199,15 @@ function ItemDetails({ type }) {
   function startEditing() {
     if (!item) return;
     setConfirmingDelete(false);
+    setActionError(null);
     setItemName(getItemName(item));
     setCategory(item.category || "");
     setDescription(item.description || "");
     setLocation(item.location || "");
     setDateField(
-      item.dateFound ||
-        item.dateLost ||
-        item.date_found ||
-        item.date_lost ||
-        ""
+      toDateInputValue(
+        item.dateFound || item.dateLost || item.date_found || item.date_lost || ""
+      )
     );
     setContact(item.contact || "");
     setImageData(item.imageData || undefined);
@@ -198,16 +217,15 @@ function ItemDetails({ type }) {
 
   function handleCancelEdit() {
     if (!item) return;
+    setActionError(null);
     setItemName(getItemName(item));
     setCategory(item.category || "");
     setDescription(item.description || "");
     setLocation(item.location || "");
     setDateField(
-      item.dateFound ||
-        item.dateLost ||
-        item.date_found ||
-        item.date_lost ||
-        ""
+      toDateInputValue(
+        item.dateFound || item.dateLost || item.date_found || item.date_lost || ""
+      )
     );
     setContact(item.contact || "");
     setImageData(item.imageData || undefined);
@@ -215,7 +233,7 @@ function ItemDetails({ type }) {
     setEditing(false);
   }
 
-  function handleSave(e) {
+  async function handleSave(e) {
     e.preventDefault();
     if (!item) return;
 
@@ -244,19 +262,57 @@ function ItemDetails({ type }) {
       imageData: imageData || undefined,
     };
 
-    updateItem(updatedItem);
-    setEditing(false);
+    try {
+      setActionError(null);
+      await updateItem(updatedItem);
+      setEditing(false);
+    } catch (error) {
+      console.error("Error updating item:", error);
+      setActionError(
+        (error && error.message) ||
+          "Could not save your changes. Please try again."
+      );
+    }
   }
 
   function handleCancelDelete() {
+    setActionError(null);
     setConfirmingDelete(false);
   }
 
-  function handleConfirmDelete() {
+  async function handleConfirmDelete() {
     if (!item) return;
-    deleteItem(item.id);
-    setConfirmingDelete(false);
-    navigate(listPath);
+    try {
+      setActionError(null);
+      await deleteItem(item.id);
+      setConfirmingDelete(false);
+      navigate(listPath);
+    } catch (error) {
+      console.error("Error deleting item:", error);
+      setActionError(
+        (error && error.message) ||
+          "Could not delete the item. Please try again."
+      );
+      setConfirmingDelete(false);
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <PageShell
+        title={`${statusLabel} Item Details`}
+        description={`View the full details of a ${statusLabel.toLowerCase()} item reported on campus.`}
+      >
+        <div
+          className="mx-auto w-full max-w-3xl rounded-[8px] border border-line bg-surface px-5 py-10 text-center sm:px-8"
+          role="status"
+        >
+          <p className="text-sm font-semibold text-mute">
+            Loading {statusLabel.toLowerCase()} item…
+          </p>
+        </div>
+      </PageShell>
+    );
   }
 
   if (!item) {
@@ -317,6 +373,16 @@ function ItemDetails({ type }) {
             <h2 className="mt-3 font-serif text-2xl font-semibold text-ink">
               Edit Item Details
             </h2>
+
+            {actionError && (
+              <div
+                className="mt-4 rounded-[6px] border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
+                role="alert"
+              >
+                <p className="font-semibold">Something went wrong</p>
+                <p className="mt-1">{actionError}</p>
+              </div>
+            )}
 
             <div className="mt-6 space-y-6">
               <div>
@@ -646,6 +712,16 @@ function ItemDetails({ type }) {
           </form>
         ) : (
           <article className="rounded-[8px] border border-line bg-surface p-5 sm:p-8">
+            {actionError && (
+              <div
+                className="mb-6 rounded-[6px] border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
+                role="alert"
+              >
+                <p className="font-semibold">Something went wrong</p>
+                <p className="mt-1">{actionError}</p>
+              </div>
+            )}
+
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span
                 className={`inline-flex rounded-[4px] border px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.08em] ${badgeClass}`}

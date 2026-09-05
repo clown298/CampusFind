@@ -1,158 +1,124 @@
 import { createContext, useEffect, useState } from "react";
+import { apiRequest } from "../utils/api";
 
 export const FoundItemContext = createContext();
 
-const SEED_FLAG = "campusfind:seed:v20260903";
+const STORAGE_KEY = "foundItems";
 
-const DEMO_FOUND_ITEMS = [
-  {
-    id: 7,
-    itemName: "Red Water Bottle",
-    category: "Other",
-    description:
-      "Stainless steel insulated water bottle, glossy red with a grey flip-top cap. Small dented ring near the bottom.",
-    location: "Auditorium",
-    dateFound: "2026-08-25",
-    contact: "Facility Desk — auditorium@gcoec.edu",
-  },
-  {
-    id: 8,
-    itemName: "Black USB Flash Drive",
-    category: "Electronics",
-    description:
-      "Compact black 32GB USB stick. A white paper label with 'Sem 5 Notes' written on it in blue ink is taped to the body.",
-    location: "Mechanical Department",
-    dateFound: "2026-08-09",
-    contact: "Prof. D. Kale — dkale@campus.edu",
-  },
-  {
-    id: 9,
-    itemName: "Brown Notebook",
-    category: "Books",
-    description:
-      "A5-sized brown spiral-bound notebook. The first few pages have handwritten Thermodynamics notes and a stamped library barcode inside.",
-    location: "Library",
-    dateFound: "2026-07-22",
-    contact: "Library Helpdesk — lib@gcoec.edu",
-  },
-  {
-    id: 10,
-    itemName: "Silver Keychain with Two Keys",
-    category: "Keys",
-    description:
-      "Simple silver metal keyring holding two brass keys and a small rubber keychain charm of a football.",
-    location: "Canteen",
-    dateFound: "2026-06-18",
-    contact: "Canteen Counter — 07172 123456",
-  },
-];
-
-function ensureFoundItemsSeeded() {
-  if (localStorage.getItem(SEED_FLAG)) {
-    const savedItems = localStorage.getItem("foundItems");
-    return savedItems ? JSON.parse(savedItems) : [];
-  }
-
+function readCachedItems() {
   try {
-    localStorage.setItem("foundItems", JSON.stringify(DEMO_FOUND_ITEMS));
-  } catch (_) {}
-  return DEMO_FOUND_ITEMS;
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : null;
+    }
+  } catch {
+    // ignore corrupted or unavailable cache
+  }
+  return null;
 }
 
-function isQuotaError(err) {
-  if (!err) return false;
-  if (typeof err === "object" && typeof err.name === "string") {
-    if (err.name === "QuotaExceededError" || err.name === "NS_ERROR_DOM_QUOTA_REACHED") {
-      return true;
-    }
+function writeCachedItems(items) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    return true;
+  } catch (err) {
+    console.warn("[FoundItemContext] LocalStorage cache write failed:", err);
+    return false;
   }
-  const msg = String(err && err.message ? err.message : err);
-  return /quota|quota exceeded|storage full|not enough space|NS_ERROR_DOM_QUOTA/i.test(
-    msg
-  );
 }
 
 function FoundItemProvider({ children }) {
-
-  const [foundItems, setFoundItems] = useState(() => {
-    return ensureFoundItemsSeeded();
-  });
-
+  const [foundItems, setFoundItems] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [persistenceError, setPersistenceError] = useState(null);
 
   function dismissPersistenceError() {
     setPersistenceError(null);
   }
 
-  useEffect(() => {
-    let serialized;
-    try {
-      serialized = JSON.stringify(foundItems);
-    } catch (err) {
-      console.error(
-        "[FoundItemContext] Failed to serialize foundItems for persistence:",
-        err
-      );
-      setPersistenceError(
-        "Found items could not be prepared for permanent storage. " +
-          "Your changes are visible for this session but may be lost if you refresh. " +
-          "Please try again or remove very large images from your reports."
-      );
-      return;
-    }
-
-    const approxKB = Math.ceil(serialized.length / 1024);
-
-    try {
-      localStorage.setItem("foundItems", serialized);
-
-      if (!localStorage.getItem(SEED_FLAG)) {
-        try {
-          localStorage.setItem(SEED_FLAG, "1");
-        } catch (seedErr) {
-          console.error(
-            "[FoundItemContext] Failed to write seed flag after data persisted:",
-            seedErr
-          );
-        }
-      }
-
-      setPersistenceError(null);
-    } catch (err) {
-      console.error(
-        "[FoundItemContext] LocalStorage persistence failed for foundItems:",
-        err
-      );
-
-      if (isQuotaError(err)) {
-        setPersistenceError(
-          `Browser storage is full (~${approxKB} KB needed for found items). ` +
-            "Your found-item reports and photos are shown now but WILL BE LOST if you refresh this page. " +
-            "To fix: delete old found items or remove large attached photos, then try again."
-        );
-      } else {
-        setPersistenceError(
-          "Found items could not be saved to permanent browser storage. " +
-            "Your changes are visible for this session only. " +
-            "Please try again — if this keeps happening, private/incognito or blocked storage may be the cause."
-        );
-      }
-    }
-  }, [foundItems]);
-
-  function deleteFoundItem(id) {
-    setFoundItems(
-      foundItems.filter((item) => item.id !== id)
-    );
+  function dismissLoadError() {
+    setLoadError(null);
   }
 
-  function updateFoundItem(updatedItem) {
-    setFoundItems(
-      foundItems.map((item) =>
-        item.id === updatedItem.id
-          ? updatedItem
-          : item
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const data = await apiRequest("/api/found-items");
+        if (cancelled) return;
+        const items = data && Array.isArray(data.items) ? data.items : [];
+        setFoundItems(items);
+        setLoadError(null);
+      } catch (err) {
+        if (cancelled) return;
+        console.error("[FoundItemContext] Failed to load found items from API:", err);
+        const cached = readCachedItems();
+        if (cached && cached.length > 0) {
+          setFoundItems(cached);
+          setLoadError(
+            "Could not connect to the server. Showing found items saved on this browser."
+          );
+        } else {
+          setLoadError(
+            "Could not load found items. Please check your connection and try again."
+          );
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isLoading) return;
+    writeCachedItems(foundItems);
+  }, [foundItems, isLoading]);
+
+  async function addFoundItem(itemData) {
+    const data = await apiRequest("/api/found-items", {
+      method: "POST",
+      body: itemData,
+    });
+    const savedItem = data && data.item;
+    if (!savedItem) {
+      const err = new Error("Failed to save found item.");
+      err.code = "API_ERROR";
+      throw err;
+    }
+    setFoundItems((prev) => [...prev, savedItem]);
+    return savedItem;
+  }
+
+  async function updateFoundItem(updatedItem) {
+    const data = await apiRequest(`/api/found-items/${updatedItem.id}`, {
+      method: "PUT",
+      body: updatedItem,
+    });
+    const savedItem = data && data.item;
+    if (!savedItem) {
+      const err = new Error("Failed to update found item.");
+      err.code = "API_ERROR";
+      throw err;
+    }
+    setFoundItems((prev) =>
+      prev.map((item) =>
+        String(item.id) === String(savedItem.id) ? savedItem : item
       )
+    );
+    return savedItem;
+  }
+
+  async function deleteFoundItem(id) {
+    await apiRequest(`/api/found-items/${id}`, { method: "DELETE" });
+    setFoundItems((prev) =>
+      prev.filter((item) => String(item.id) !== String(id))
     );
   }
 
@@ -161,8 +127,12 @@ function FoundItemProvider({ children }) {
       value={{
         foundItems,
         setFoundItems,
-        deleteFoundItem,
+        addFoundItem,
         updateFoundItem,
+        deleteFoundItem,
+        isLoading,
+        loadError,
+        dismissLoadError,
         persistenceError,
         dismissPersistenceError,
       }}

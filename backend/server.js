@@ -25,15 +25,6 @@ const FOUND_MAP = {
   imageData: 'image_data',
 }
 
-function toSnakeCase(obj, map) {
-  const out = {}
-  for (const key of Object.keys(obj)) {
-    const col = map[key] || key
-    out[col] = obj[key]
-  }
-  return out
-}
-
 function toCamelCase(row, map) {
   if (!row) return row
   const out = {}

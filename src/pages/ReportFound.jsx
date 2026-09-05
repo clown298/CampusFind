@@ -71,7 +71,7 @@ function validateForm(data) {
 }
 
 function ReportFound() {
-  const { foundItems, setFoundItems } = useContext(FoundItemContext);
+  const { addFoundItem } = useContext(FoundItemContext);
 
   const [formData, setFormData] = useState({
     itemName: "",
@@ -148,7 +148,7 @@ function ReportFound() {
     });
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
 
     if (isSubmitting || isLoading) {
@@ -167,12 +167,7 @@ function ReportFound() {
     setIsSubmitting(true);
 
     try {
-      const newItem = {
-        id: Date.now(),
-        ...formData,
-      };
-
-      setFoundItems([...foundItems, newItem]);
+      await addFoundItem(formData);
 
       setFormData({
         itemName: "",
@@ -189,7 +184,11 @@ function ReportFound() {
       setSuccess(true);
     } catch (error) {
       console.error("Error:", error);
-      setSubmissionError("Something went wrong. Please try again.");
+      setSubmissionError(
+        error && error.code === "NETWORK_ERROR"
+          ? "Could not connect to the backend. Please try again."
+          : (error && error.message) || "Failed to save found item."
+      );
     } finally {
       setIsLoading(false);
       setIsSubmitting(false);

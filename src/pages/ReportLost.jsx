@@ -71,7 +71,7 @@ function validateForm(data) {
 }
 
 function ReportLost() {
-  const { lostItems, setLostItems } = useContext(LostItemContext);
+  const { addLostItem } = useContext(LostItemContext);
 
   const [formData, setFormData] = useState({
     itemName: "",
@@ -167,30 +167,7 @@ function ReportLost() {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch("http://localhost:5000/api/lost-items", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(formData),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setSubmissionError(data.message || "Failed to save lost item.");
-        setIsLoading(false);
-        setIsSubmitting(false);
-        return;
-      }
-
-      const savedItem = {
-        ...(data.item || {}),
-        imageData:
-          (data.item && data.item.imageData) || formData.imageData || undefined,
-      };
-
-      setLostItems([...lostItems, savedItem]);
+      await addLostItem(formData);
 
       setFormData({
         itemName: "",
@@ -208,7 +185,9 @@ function ReportLost() {
     } catch (error) {
       console.error("Error:", error);
       setSubmissionError(
-        "Could not connect to the backend. Please try again."
+        error && error.code === "NETWORK_ERROR"
+          ? "Could not connect to the backend. Please try again."
+          : (error && error.message) || "Failed to save lost item."
       );
     } finally {
       setIsLoading(false);

@@ -55,10 +55,20 @@ function ArrowRightIcon({ className = "" }) {
 }
 
 function Home() {
-  const { lostItems, deleteLostItem, updateLostItem } =
-    useContext(LostItemContext);
-  const { foundItems, deleteFoundItem, updateFoundItem } =
-    useContext(FoundItemContext);
+  const {
+    lostItems,
+    deleteLostItem,
+    updateLostItem,
+    isLoading: lostLoading,
+    loadError: lostLoadError,
+  } = useContext(LostItemContext);
+  const {
+    foundItems,
+    deleteFoundItem,
+    updateFoundItem,
+    isLoading: foundLoading,
+    loadError: foundLoadError,
+  } = useContext(FoundItemContext);
   const navigate = useNavigate();
 
   const [heroSearch, setHeroSearch] = useState("");
@@ -109,6 +119,19 @@ function Home() {
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-6xl overflow-x-clip px-4 py-10 sm:px-6">
+      {(lostLoadError || foundLoadError) && (
+        <div
+          className="mb-6 rounded-[6px] border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
+          role="alert"
+        >
+          <p className="font-semibold">Some listings could not be loaded</p>
+          <p className="mt-1">
+            {lostLoadError ? `${lostLoadError} ` : ""}
+            {foundLoadError ? ` ${foundLoadError}` : ""}
+          </p>
+        </div>
+      )}
+
       {/* 1. Hero + Search */}
       <section className="border-b border-line pb-10 sm:pb-14">
         <div className="mx-auto max-w-3xl text-center">
@@ -281,7 +304,16 @@ function Home() {
               </Button>
             </div>
 
-            {recentLost.length === 0 ? (
+            {lostLoading ? (
+              <div
+                className="rounded-[8px] border border-line bg-surface px-5 py-10 text-center"
+                role="status"
+              >
+                <p className="text-sm font-semibold text-mute">
+                  Loading recent lost items…
+                </p>
+              </div>
+            ) : recentLost.length === 0 ? (
               <EmptyState
                 title="No lost items yet"
                 description="Items reported missing will appear here for other students to check."
@@ -330,7 +362,16 @@ function Home() {
               </Button>
             </div>
 
-            {recentFound.length === 0 ? (
+            {foundLoading ? (
+              <div
+                className="rounded-[8px] border border-line bg-surface px-5 py-10 text-center"
+                role="status"
+              >
+                <p className="text-sm font-semibold text-mute">
+                  Loading recent found items…
+                </p>
+              </div>
+            ) : recentFound.length === 0 ? (
               <EmptyState
                 title="No found items yet"
                 description="Items turned in will appear here so owners can identify them."

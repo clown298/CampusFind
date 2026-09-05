@@ -8,7 +8,7 @@ import EmptyState from "../components/EmptyState";
 import Button from "../components/Button";
 
 function FoundItemsPage() {
-  const { foundItems, deleteFoundItem, updateFoundItem } =
+  const { foundItems, deleteFoundItem, updateFoundItem, isLoading, loadError } =
     useContext(FoundItemContext);
 
   const [search, setSearch] = useState(() => {
@@ -83,7 +83,26 @@ function FoundItemsPage() {
         searchPlaceholder="Search found items..."
       />
 
-      {showing === 0 ? (
+      {loadError && (
+        <div
+          className="mb-4 rounded-[6px] border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
+          role="alert"
+        >
+          <p className="font-semibold">Found items unavailable</p>
+          <p className="mt-1">{loadError}</p>
+        </div>
+      )}
+
+      {isLoading ? (
+        <div
+          className="rounded-[8px] border border-line bg-surface px-5 py-10 text-center sm:px-8"
+          role="status"
+        >
+          <p className="text-sm font-semibold text-mute">
+            Loading found items…
+          </p>
+        </div>
+      ) : showing === 0 ? (
         total === 0 ? (
           <EmptyState
             title="No found items have been reported yet"
