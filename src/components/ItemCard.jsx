@@ -1,9 +1,15 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { Link } from "react-router-dom";
 import Button from "./Button";
+import { AuthContext } from "../context/AuthContext";
 import { formatDisplayDate, getItemDate, getItemName } from "../utils/items";
 
 function ItemCard({ type, item, onUpdate, onDelete }) {
+  const { user } = useContext(AuthContext);
+  const canManage = Boolean(
+    user && item.userId && String(item.userId) === String(user.id)
+  );
+
   const isFound = type === "found";
   const statusLabel = isFound ? "Found" : "Lost";
   const accentClass = isFound ? "text-canopy" : "text-brick";
@@ -170,47 +176,49 @@ function ItemCard({ type, item, onUpdate, onDelete }) {
             </div>
           </dl>
 
-          {confirmingDelete ? (
-            <div
-              className="mt-5 rounded-[6px] border border-line bg-paper p-4"
-              role="group"
-              aria-label="Confirm delete"
-            >
-              <p className="text-sm font-semibold text-ink">
-                Delete this {statusLabel.toLowerCase()} item?
-              </p>
-              <p className="mt-1 text-sm text-mute">
-                "{displayName || "This item"}" will be removed from the list.
-                This cannot be undone.
-              </p>
-              <div className="mt-4 flex flex-wrap gap-3">
-                <Button variant="dangerSolid" onClick={handleConfirmDelete}>
+          {canManage ? (
+            confirmingDelete ? (
+              <div
+                className="mt-5 rounded-[6px] border border-line bg-paper p-4"
+                role="group"
+                aria-label="Confirm delete"
+              >
+                <p className="text-sm font-semibold text-ink">
+                  Delete this {statusLabel.toLowerCase()} item?
+                </p>
+                <p className="mt-1 text-sm text-mute">
+                  "{displayName || "This item"}" will be removed from the list.
+                  This cannot be undone.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <Button variant="dangerSolid" onClick={handleConfirmDelete}>
+                    Delete
+                  </Button>
+                  <Button variant="secondary" onClick={handleCancelDelete}>
+                    Cancel
+                  </Button>
+                </div>
+
+                {error && (
+                  <p className="mt-3 rounded-[4px] border border-lost/30 bg-lost/10 p-3 text-sm font-medium text-lost">
+                    {error}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Button variant="secondary" onClick={(e) => { e.preventDefault(); e.stopPropagation(); startEditing(); }}>
+                  Edit
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmingDelete(true); }}
+                >
                   Delete
                 </Button>
-                <Button variant="secondary" onClick={handleCancelDelete}>
-                  Cancel
-                </Button>
               </div>
-
-              {error && (
-                <p className="mt-3 rounded-[4px] border border-lost/30 bg-lost/10 p-3 text-sm font-medium text-lost">
-                  {error}
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="mt-5 flex flex-wrap gap-3">
-              <Button variant="secondary" onClick={(e) => { e.preventDefault(); e.stopPropagation(); startEditing(); }}>
-                Edit
-              </Button>
-              <Button
-                variant="danger"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmingDelete(true); }}
-              >
-                Delete
-              </Button>
-            </div>
-          )}
+            )
+          ) : null}
         </>
       )}
     </article>

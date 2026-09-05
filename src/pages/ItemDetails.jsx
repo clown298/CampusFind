@@ -2,6 +2,7 @@ import { useContext, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { LostItemContext } from "../context/LostItemContext";
 import { FoundItemContext } from "../context/FoundItemContext";
+import { AuthContext } from "../context/AuthContext";
 import PageShell from "../components/PageShell";
 import Button from "../components/Button";
 import EmptyState from "../components/EmptyState";
@@ -123,6 +124,8 @@ function ItemDetails({ type }) {
 
   const { id } = useParams();
   const navigate = useNavigate();
+
+  const { user } = useContext(AuthContext);
 
   const lostCtx = useContext(LostItemContext);
   const foundCtx = useContext(FoundItemContext);
@@ -339,6 +342,9 @@ function ItemDetails({ type }) {
 
   const displayName = getItemName(item);
   const displayDate = formatDisplayDate(getItemDate(item, type));
+  const canManage = Boolean(
+    user && item.userId && String(item.userId) === String(user.id)
+  );
 
   const shellTitle = `${displayName || statusLabel + " Item"} — ${statusLabel}`;
   const shellDescription = isFound
@@ -830,6 +836,7 @@ function ItemDetails({ type }) {
               </div>
             ) : (
               <div className="mt-8 flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:justify-between">
+                {canManage ? (
                 <div className="flex flex-col-reverse items-stretch gap-3 sm:flex-row">
                   <Button
                     variant="secondary"
@@ -846,13 +853,14 @@ function ItemDetails({ type }) {
                     Delete
                   </Button>
                 </div>
-                <Button
-                  to={reportPath}
-                  variant={reportVariant}
-                  className="w-full sm:w-auto"
-                >
-                  Report Another {statusLabel} Item
-                </Button>
+              ) : null}
+              <Button
+                to={reportPath}
+                variant={reportVariant}
+                className="w-full sm:w-auto"
+              >
+                Report Another {statusLabel} Item
+              </Button>
               </div>
             )}
           </article>

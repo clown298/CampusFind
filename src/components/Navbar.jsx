@@ -1,5 +1,6 @@
-import { useEffect, useId, useRef, useState } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { useContext, useEffect, useId, useRef, useState } from "react";
+import { Link, NavLink, useNavigate } from "react-router-dom";
+import { AuthContext } from "../context/AuthContext";
 
 const navItems = [
   { to: "/", label: "Home", end: true },
@@ -18,6 +19,9 @@ function navLinkClass({ isActive }) {
 }
 
 function Navbar() {
+  const { isAuthenticated, logout } = useContext(AuthContext);
+  const navigate = useNavigate();
+
   const [menuOpen, setMenuOpen] = useState(false);
   const menuId = useId();
   const menuRef = useRef(null);
@@ -63,6 +67,15 @@ function Navbar() {
     setMenuOpen(false);
   }
 
+  async function handleLogout() {
+    closeMenu();
+    try {
+      await logout();
+    } finally {
+      navigate("/");
+    }
+  }
+
   return (
     <header className="sticky top-0 z-50 border-b border-line bg-paper">
       <nav className="mx-auto max-w-6xl px-4 sm:px-6" aria-label="Primary">
@@ -106,6 +119,30 @@ function Navbar() {
             >
               Report Found
             </Link>
+            {isAuthenticated ? (
+              <>
+                <Link
+                  to="/my-reports"
+                  className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-[6px] px-3 text-sm font-semibold text-ink transition-colors duration-200 hover:text-brick focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+                >
+                  My Reports
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-[6px] border border-line bg-surface px-4 text-sm font-semibold text-ink transition-colors duration-200 hover:border-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+                >
+                  Logout
+                </button>
+              </>
+            ) : (
+              <Link
+                to="/login"
+                className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-[6px] border border-ink bg-surface px-4 text-sm font-semibold text-ink transition-colors duration-200 hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+              >
+                Login
+              </Link>
+            )}
           </div>
 
           <button
@@ -180,6 +217,22 @@ function Navbar() {
                   {item.label}
                 </NavLink>
               ))}
+              {isAuthenticated ? (
+                <NavLink
+                  to="/my-reports"
+                  onClick={closeMenu}
+                  className={({ isActive }) =>
+                    [
+                      "flex min-h-[44px] items-center rounded-[6px] px-3 text-base font-medium",
+                      isActive
+                        ? "bg-surface text-ink"
+                        : "text-mute hover:bg-surface hover:text-ink",
+                    ].join(" ")
+                  }
+                >
+                  My Reports
+                </NavLink>
+              ) : null}
             </div>
 
             <div className="mt-4 flex flex-col gap-2">
@@ -197,6 +250,23 @@ function Navbar() {
               >
                 Report Found
               </Link>
+              {isAuthenticated ? (
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-[6px] border border-line bg-surface px-4 text-sm font-semibold text-ink transition-colors duration-200 hover:border-ink"
+                >
+                  Logout
+                </button>
+              ) : (
+                <Link
+                  to="/login"
+                  onClick={closeMenu}
+                  className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-[6px] border border-ink bg-surface px-4 text-sm font-semibold text-ink transition-colors duration-200 hover:bg-paper"
+                >
+                  Login
+                </Link>
+              )}
             </div>
           </div>
         )}

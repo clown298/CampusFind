@@ -7,8 +7,11 @@ const { ensureSchema } = require('../config/schema')
 
 let server
 let baseUrl
+let authCookie = null
+let authUserId = null
 const createdItemIds = { lost: [], found: [] }
 const createdRequestIds = []
+const createdUserIds = []
 
 async function createTestPair(prefix) {
   const lost = await pool.query(
@@ -27,9 +30,12 @@ async function createTestPair(prefix) {
 }
 
 async function api(path, options = {}) {
+  const headers = {}
+  if (options.body !== undefined) headers['Content-Type'] = 'application/json'
+  if (authCookie) headers.Cookie = authCookie
   const res = await fetch(`${baseUrl}${path}`, {
     method: options.method || 'GET',
-    headers: options.body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+    headers,
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
   })
   let data
@@ -46,6 +52,22 @@ before(async () => {
   server = app.listen(0)
   await new Promise((resolve) => server.once('listening', resolve))
   baseUrl = `http://127.0.0.1:${server.address().port}`
+
+  const email = `recovery_${Date.now()}_${Math.random().toString(16).slice(2)}@campus.test`
+  const res = await fetch(`${baseUrl}/api/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: 'Recovery Tester',
+      email,
+      password: 'password123',
+    }),
+  })
+  assert.equal(res.status, 201)
+  const body = await res.json()
+  authUserId = body.user.id
+  createdUserIds.push(authUserId)
+  authCookie = res.headers.get('set-cookie').split(';')[0]
 })
 
 after(async () => {
@@ -62,6 +84,11 @@ after(async () => {
   if (createdItemIds.found.length > 0) {
     await pool.query('DELETE FROM found_items WHERE id = ANY($1::int[])', [
       createdItemIds.found,
+    ])
+  }
+  if (createdUserIds.length > 0) {
+    await pool.query('DELETE FROM users WHERE id = ANY($1::int[])', [
+      createdUserIds,
     ])
   }
   await new Promise((resolve) => server.close(resolve))
@@ -92,6 +119,7 @@ describe('Recovery Requests API', () => {
     assert.equal(res.data.request.lostItemId, lostId)
     assert.equal(res.data.request.foundItemId, foundId)
     assert.equal(res.data.request.claimantName, 'Amit Student')
+    assert.equal(res.data.request.claimantUserId, authUserId)
     assert.equal(res.data.request.lostItem.itemName, 'ReqCreate Lost Wallet')
     assert.equal(res.data.request.foundItem.itemName, 'ReqCreate Found Wallet')
     createdRequestIds.push(res.data.request.id)

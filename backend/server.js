@@ -1,12 +1,19 @@
 const express = require('express')
 const cors = require('cors')
 const morgan = require('morgan')
+const bcrypt = require('bcryptjs')
+const jwt = require('jsonwebtoken')
 const pool = require('./config/db')
 const { ensureSchema } = require('./config/schema')
 
 const app = express()
 
-app.use(cors())
+app.use(
+  cors({
+    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    credentials: true,
+  })
+)
 app.use(express.json({ limit: '1mb' }))
 app.use(morgan('dev'))
 
@@ -18,12 +25,14 @@ const LOST_MAP = {
   itemName: 'item_name',
   dateLost: 'date_lost',
   imageData: 'image_data',
+  userId: 'user_id',
 }
 
 const FOUND_MAP = {
   itemName: 'item_name',
   dateFound: 'date_found',
   imageData: 'image_data',
+  userId: 'user_id',
 }
 
 function toCamelCase(row, map) {
@@ -40,6 +49,226 @@ function toCamelCase(row, map) {
 function toCamelCaseList(rows, map) {
   return rows.map((r) => toCamelCase(r, map))
 }
+
+// ---------------------------------------------------------------------------
+// Authentication (JWT in an httpOnly cookie)
+// ---------------------------------------------------------------------------
+
+const JWT_SECRET = process.env.JWT_SECRET || 'campusfind-local-dev-secret'
+const COOKIE_NAME = 'campusfind_token'
+const TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  sameSite: 'lax',
+  secure: process.env.NODE_ENV === 'production',
+  path: '/',
+  maxAge: TOKEN_MAX_AGE_MS,
+}
+
+function parseCookies(req) {
+  const cookies = {}
+  const header = req.headers.cookie || ''
+  for (const part of header.split(';')) {
+    const eq = part.indexOf('=')
+    if (eq === -1) continue
+    const key = part.slice(0, eq).trim()
+    const value = part.slice(eq + 1).trim()
+    if (key) cookies[key] = decodeURIComponent(value)
+  }
+  return cookies
+}
+
+function toSafeUser(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    createdAt: row.created_at,
+  }
+}
+
+function setAuthCookie(res, token) {
+  res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS)
+}
+
+function clearAuthCookie(res) {
+  res.clearCookie(COOKIE_NAME, { ...COOKIE_OPTIONS, maxAge: undefined })
+}
+
+async function requireAuth(req, res, next) {
+  try {
+    const token = parseCookies(req)[COOKIE_NAME]
+    if (!token) {
+      return res.status(401).json({ message: 'Please log in to continue.' })
+    }
+
+    let payload
+    try {
+      payload = jwt.verify(token, JWT_SECRET)
+    } catch {
+      return res.status(401).json({ message: 'Please log in to continue.' })
+    }
+
+    const result = await pool.query(
+      'SELECT id, name, email, token_version FROM users WHERE id = $1',
+      [payload.sub]
+    )
+    if (result.rows.length === 0) {
+      return res.status(401).json({ message: 'Please log in to continue.' })
+    }
+    // Reject tokens issued before the latest logout (session invalidation).
+    if (Number(result.rows[0].token_version) !== Number(payload.ver)) {
+      return res.status(401).json({ message: 'Please log in to continue.' })
+    }
+
+    req.user = result.rows[0]
+    next()
+  } catch (error) {
+    console.error('Authentication error:', error.message)
+    res.status(500).json({ message: 'Authentication check failed.', error: error.message })
+  }
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function validateRegister(body) {
+  const errors = {}
+  body = body || {}
+
+  if (typeof body.name !== 'string' || !body.name.trim()) {
+    errors.name = 'Full name is required.'
+  } else if (body.name.trim().length > 120) {
+    errors.name = 'Full name must be 120 characters or fewer.'
+  }
+
+  if (typeof body.email !== 'string' || !body.email.trim()) {
+    errors.email = 'Email is required.'
+  } else if (body.email.trim().length > 255) {
+    errors.email = 'Email must be 255 characters or fewer.'
+  } else if (!EMAIL_RE.test(body.email.trim())) {
+    errors.email = 'Enter a valid email address.'
+  }
+
+  if (typeof body.password !== 'string' || body.password.length < 8) {
+    errors.password = 'Password must be at least 8 characters.'
+  }
+
+  return errors
+}
+
+function validateLogin(body) {
+  const errors = {}
+  body = body || {}
+  if (typeof body.email !== 'string' || !body.email.trim()) {
+    errors.email = 'Email is required.'
+  }
+  if (typeof body.password !== 'string' || !body.password) {
+    errors.password = 'Password is required.'
+  }
+  return errors
+}
+
+// ---------------------------------------------------------------------------
+// Auth routes
+// ---------------------------------------------------------------------------
+
+app.post('/api/auth/register', async (req, res) => {
+  const errors = validateRegister(req.body)
+  if (Object.keys(errors).length > 0) {
+    return res.status(400).json({ message: 'Validation failed.', errors })
+  }
+
+  const name = req.body.name.trim()
+  const email = req.body.email.trim().toLowerCase()
+
+  try {
+    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email])
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ message: 'An account with this email already exists.' })
+    }
+
+    const passwordHash = await bcrypt.hash(req.body.password, 10)
+    const result = await pool.query(
+      `INSERT INTO users (name, email, password_hash)
+       VALUES ($1, $2, $3)
+       RETURNING id, name, email, created_at, token_version`,
+      [name, email, passwordHash]
+    )
+
+    const token = jwt.sign(
+      { sub: result.rows[0].id, ver: result.rows[0].token_version },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    )
+    setAuthCookie(res, token)
+
+    res.status(201).json({
+      message: 'Account created successfully!',
+      user: toSafeUser(result.rows[0]),
+    })
+  } catch (error) {
+    console.error('Registration error:', error.message)
+    res.status(500).json({ message: 'Failed to create account', error: error.message })
+  }
+})
+
+app.post('/api/auth/login', async (req, res) => {
+  const errors = validateLogin(req.body)
+  if (Object.keys(errors).length > 0) {
+    return res.status(400).json({ message: 'Validation failed.', errors })
+  }
+
+  const email = req.body.email.trim().toLowerCase()
+
+  try {
+    const result = await pool.query(
+      'SELECT id, name, email, password_hash, created_at, token_version FROM users WHERE email = $1',
+      [email]
+    )
+    const user = result.rows[0]
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid email or password.' })
+    }
+
+    const matches = await bcrypt.compare(req.body.password, user.password_hash)
+    if (!matches) {
+      return res.status(401).json({ message: 'Invalid email or password.' })
+    }
+
+    const token = jwt.sign(
+      { sub: user.id, ver: user.token_version },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    )
+    setAuthCookie(res, token)
+
+    res.json({ message: 'Logged in successfully!', user: toSafeUser(user) })
+  } catch (error) {
+    console.error('Login error:', error.message)
+    res.status(500).json({ message: 'Failed to log in', error: error.message })
+  }
+})
+
+app.post('/api/auth/logout', requireAuth, async (req, res) => {
+  try {
+    await pool.query(
+      `UPDATE users
+       SET token_version = token_version + 1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [req.user.id]
+    )
+  } catch (error) {
+    console.error('Logout error:', error.message)
+    return res.status(500).json({ message: 'Failed to log out', error: error.message })
+  }
+  clearAuthCookie(res)
+  res.json({ message: 'Logged out successfully!' })
+})
+
+app.get('/api/auth/me', requireAuth, (req, res) => {
+  res.json({ user: req.user })
+})
 
 // ---------------------------------------------------------------------------
 // Validation helpers
@@ -90,7 +319,7 @@ function validateItem(body, dateField) {
 const RECOVERY_SELECT = `
   SELECT rr.id, rr.lost_item_id, rr.found_item_id,
          rr.claimant_name, rr.claimant_contact, rr.claimant_message,
-         rr.status,
+         rr.claimant_user_id, rr.status,
          to_char(rr.created_at, 'YYYY-MM-DD HH24:MI') AS created_at,
          to_char(rr.updated_at, 'YYYY-MM-DD HH24:MI') AS updated_at,
          li.item_name AS lost_item_name, li.category AS lost_item_category,
@@ -121,6 +350,7 @@ function toRecoveryRequest(row) {
     claimantName: row.claimant_name,
     claimantContact: row.claimant_contact,
     claimantMessage: row.claimant_message,
+    claimantUserId: row.claimant_user_id,
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -229,7 +459,7 @@ app.get('/api/lost-items/:id', async (req, res) => {
   }
 })
 
-app.post('/api/lost-items', async (req, res) => {
+app.post('/api/lost-items', requireAuth, async (req, res) => {
   const errors = validateItem(req.body, 'dateLost')
   if (Object.keys(errors).length > 0) {
     return res.status(400).json({ message: 'Validation failed.', errors })
@@ -239,10 +469,10 @@ app.post('/api/lost-items', async (req, res) => {
     const { itemName, category, description, location, dateLost, contact, imageData } = req.body
 
     const result = await pool.query(
-      `INSERT INTO lost_items (item_name, category, description, location, date_lost, contact, image_data)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO lost_items (item_name, category, description, location, date_lost, contact, image_data, user_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [itemName.trim(), category.trim(), description.trim(), location.trim(), dateLost, contact.trim(), imageData || null]
+      [itemName.trim(), category.trim(), description.trim(), location.trim(), dateLost, contact.trim(), imageData || null, req.user.id]
     )
 
     res.status(201).json({
@@ -255,7 +485,7 @@ app.post('/api/lost-items', async (req, res) => {
   }
 })
 
-app.put('/api/lost-items/:id', async (req, res) => {
+app.put('/api/lost-items/:id', requireAuth, async (req, res) => {
   const errors = validateItem(req.body, 'dateLost')
   if (Object.keys(errors).length > 0) {
     return res.status(400).json({ message: 'Validation failed.', errors })
@@ -265,6 +495,14 @@ app.put('/api/lost-items/:id', async (req, res) => {
     const { id } = req.params
     if (!Number.isInteger(Number(id)) || Number(id) <= 0) {
       return res.status(400).json({ message: 'Invalid item ID.' })
+    }
+
+    const owner = await pool.query('SELECT id, user_id FROM lost_items WHERE id = $1', [id])
+    if (owner.rows.length === 0) {
+      return res.status(404).json({ message: 'Lost item not found.' })
+    }
+    if (owner.rows[0].user_id !== req.user.id) {
+      return res.status(403).json({ message: 'You do not have permission to modify this report.' })
     }
 
     const { itemName, category, description, location, dateLost, contact, imageData } = req.body
@@ -289,17 +527,22 @@ app.put('/api/lost-items/:id', async (req, res) => {
   }
 })
 
-app.delete('/api/lost-items/:id', async (req, res) => {
+app.delete('/api/lost-items/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params
     if (!Number.isInteger(Number(id)) || Number(id) <= 0) {
       return res.status(400).json({ message: 'Invalid item ID.' })
     }
 
-    const result = await pool.query('DELETE FROM lost_items WHERE id = $1 RETURNING *', [id])
-    if (result.rows.length === 0) {
+    const owner = await pool.query('SELECT id, user_id FROM lost_items WHERE id = $1', [id])
+    if (owner.rows.length === 0) {
       return res.status(404).json({ message: 'Lost item not found.' })
     }
+    if (owner.rows[0].user_id !== req.user.id) {
+      return res.status(403).json({ message: 'You do not have permission to modify this report.' })
+    }
+
+    await pool.query('DELETE FROM lost_items WHERE id = $1', [id])
 
     res.json({ message: 'Lost item deleted successfully.' })
   } catch (error) {
@@ -339,7 +582,7 @@ app.get('/api/found-items/:id', async (req, res) => {
   }
 })
 
-app.post('/api/found-items', async (req, res) => {
+app.post('/api/found-items', requireAuth, async (req, res) => {
   const errors = validateItem(req.body, 'dateFound')
   if (Object.keys(errors).length > 0) {
     return res.status(400).json({ message: 'Validation failed.', errors })
@@ -349,10 +592,10 @@ app.post('/api/found-items', async (req, res) => {
     const { itemName, category, description, location, dateFound, contact, imageData } = req.body
 
     const result = await pool.query(
-      `INSERT INTO found_items (item_name, category, description, location, date_found, contact, image_data)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO found_items (item_name, category, description, location, date_found, contact, image_data, user_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [itemName.trim(), category.trim(), description.trim(), location.trim(), dateFound, contact.trim(), imageData || null]
+      [itemName.trim(), category.trim(), description.trim(), location.trim(), dateFound, contact.trim(), imageData || null, req.user.id]
     )
 
     res.status(201).json({
@@ -365,7 +608,7 @@ app.post('/api/found-items', async (req, res) => {
   }
 })
 
-app.put('/api/found-items/:id', async (req, res) => {
+app.put('/api/found-items/:id', requireAuth, async (req, res) => {
   const errors = validateItem(req.body, 'dateFound')
   if (Object.keys(errors).length > 0) {
     return res.status(400).json({ message: 'Validation failed.', errors })
@@ -375,6 +618,14 @@ app.put('/api/found-items/:id', async (req, res) => {
     const { id } = req.params
     if (!Number.isInteger(Number(id)) || Number(id) <= 0) {
       return res.status(400).json({ message: 'Invalid item ID.' })
+    }
+
+    const owner = await pool.query('SELECT id, user_id FROM found_items WHERE id = $1', [id])
+    if (owner.rows.length === 0) {
+      return res.status(404).json({ message: 'Found item not found.' })
+    }
+    if (owner.rows[0].user_id !== req.user.id) {
+      return res.status(403).json({ message: 'You do not have permission to modify this report.' })
     }
 
     const { itemName, category, description, location, dateFound, contact, imageData } = req.body
@@ -399,17 +650,22 @@ app.put('/api/found-items/:id', async (req, res) => {
   }
 })
 
-app.delete('/api/found-items/:id', async (req, res) => {
+app.delete('/api/found-items/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params
     if (!Number.isInteger(Number(id)) || Number(id) <= 0) {
       return res.status(400).json({ message: 'Invalid item ID.' })
     }
 
-    const result = await pool.query('DELETE FROM found_items WHERE id = $1 RETURNING *', [id])
-    if (result.rows.length === 0) {
+    const owner = await pool.query('SELECT id, user_id FROM found_items WHERE id = $1', [id])
+    if (owner.rows.length === 0) {
       return res.status(404).json({ message: 'Found item not found.' })
     }
+    if (owner.rows[0].user_id !== req.user.id) {
+      return res.status(403).json({ message: 'You do not have permission to modify this report.' })
+    }
+
+    await pool.query('DELETE FROM found_items WHERE id = $1', [id])
 
     res.json({ message: 'Found item deleted successfully.' })
   } catch (error) {
@@ -451,7 +707,7 @@ app.get('/api/recovery-requests/:id', async (req, res) => {
   }
 })
 
-app.post('/api/recovery-requests', async (req, res) => {
+app.post('/api/recovery-requests', requireAuth, async (req, res) => {
   const errors = validateRecoveryRequest(req.body)
   if (Object.keys(errors).length > 0) {
     return res.status(400).json({ message: 'Validation failed.', errors })
@@ -487,10 +743,10 @@ app.post('/api/recovery-requests', async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO recovery_requests
-         (lost_item_id, found_item_id, claimant_name, claimant_contact, claimant_message, status)
-       VALUES ($1, $2, $3, $4, $5, 'pending')
+         (lost_item_id, found_item_id, claimant_name, claimant_contact, claimant_message, claimant_user_id, status)
+       VALUES ($1, $2, $3, $4, $5, $6, 'pending')
        RETURNING id`,
-      [lostItemId, foundItemId, claimantName, claimantContact, claimantMessage]
+      [lostItemId, foundItemId, claimantName, claimantContact, claimantMessage, req.user.id]
     )
 
     const row = await getRecoveryRequestById(result.rows[0].id)
@@ -543,6 +799,31 @@ app.patch('/api/recovery-requests/:id/status', async (req, res) => {
   } catch (error) {
     console.error('Error updating recovery request:', error.message)
     res.status(500).json({ message: 'Failed to update recovery request', error: error.message })
+  }
+})
+
+// ---------------------------------------------------------------------------
+// My reports (authenticated user only)
+// ---------------------------------------------------------------------------
+
+app.get('/api/my-reports', requireAuth, async (req, res) => {
+  try {
+    const lost = await pool.query(
+      'SELECT * FROM lost_items WHERE user_id = $1 ORDER BY created_at DESC',
+      [req.user.id]
+    )
+    const found = await pool.query(
+      'SELECT * FROM found_items WHERE user_id = $1 ORDER BY created_at DESC',
+      [req.user.id]
+    )
+
+    res.json({
+      lostItems: toCamelCaseList(lost.rows, LOST_MAP),
+      foundItems: toCamelCaseList(found.rows, FOUND_MAP),
+    })
+  } catch (error) {
+    console.error('Error fetching my reports:', error.message)
+    res.status(500).json({ message: 'Failed to fetch your reports', error: error.message })
   }
 })
 

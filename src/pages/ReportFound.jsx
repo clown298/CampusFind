@@ -1,6 +1,7 @@
 import { useContext, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { FoundItemContext } from "../context/FoundItemContext";
+import { AuthContext } from "../context/AuthContext";
 import PageShell from "../components/PageShell";
 import Button from "../components/Button";
 
@@ -72,6 +73,9 @@ function validateForm(data) {
 
 function ReportFound() {
   const { addFoundItem } = useContext(FoundItemContext);
+  const { isAuthenticated } = useContext(AuthContext);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
     itemName: "",
@@ -152,6 +156,13 @@ function ReportFound() {
     e.preventDefault();
 
     if (isSubmitting || isLoading) {
+      return;
+    }
+
+    if (!isAuthenticated) {
+      navigate("/login", {
+        state: { from: { pathname: location.pathname, search: location.search } },
+      });
       return;
     }
 
@@ -254,6 +265,34 @@ function ReportFound() {
       }
     >
       <div className="mx-auto w-full max-w-2xl">
+        {!isAuthenticated ? (
+          <div className="mb-6 rounded-[6px] border border-canopy/30 bg-canopy/5 p-4 text-sm">
+            <p className="font-semibold text-ink">
+              Sign in to report a found item
+            </p>
+            <p className="mt-1 leading-6 text-mute">
+              You can keep browsing as a guest, but submitting a found item
+              report requires an account so you can manage it later.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-3">
+              <Button
+                variant="save"
+                to="/login"
+                state={{ from: { pathname: location.pathname, search: location.search } }}
+              >
+                Login
+              </Button>
+              <Button
+                variant="secondary"
+                to="/register"
+                state={{ from: { pathname: location.pathname, search: location.search } }}
+              >
+                Register
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
         <form
           onSubmit={handleSubmit}
           noValidate

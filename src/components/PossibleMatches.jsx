@@ -1,9 +1,10 @@
 import { useContext, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import Button from "./Button";
 import { findPossibleMatches } from "../utils/matching";
 import { formatDisplayDate, getItemDate, getItemName } from "../utils/items";
 import { RecoveryRequestContext } from "../context/RecoveryRequestContext";
+import { AuthContext } from "../context/AuthContext";
 
 const RECOVERY_STATUS_META = {
   pending: { label: "Pending", classes: "border-line text-ink" },
@@ -23,6 +24,9 @@ const RECOVERY_STATUS_NOTES = {
 
 function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
   const { createRecoveryRequest } = useContext(RecoveryRequestContext);
+  const { isAuthenticated } = useContext(AuthContext);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const [open, setOpen] = useState(false);
   const [claimantName, setClaimantName] = useState("");
@@ -31,6 +35,16 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
+
+  function requestRecovery() {
+    if (!isAuthenticated) {
+      navigate("/login", {
+        state: { from: { pathname: location.pathname, search: location.search } },
+      });
+      return;
+    }
+    setOpen(true);
+  }
 
   if (existingRequest) {
     const meta =
@@ -109,7 +123,7 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
       {!open ? (
         <Button
           variant="secondary"
-          onClick={() => setOpen(true)}
+          onClick={requestRecovery}
           className="w-full sm:w-auto"
         >
           Request Recovery

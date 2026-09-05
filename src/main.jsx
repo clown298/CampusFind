@@ -8,21 +8,22 @@ import "./index.css";
 import LostItemProvider from "./context/LostItemContext";
 import FoundItemProvider from "./context/FoundItemContext";
 import RecoveryRequestProvider from "./context/RecoveryRequestContext";
+import AuthProvider from "./context/AuthContext";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BrowserRouter>
+      <AuthProvider>
+        <LostItemProvider>
+          <FoundItemProvider>
+            <RecoveryRequestProvider>
 
-      <LostItemProvider>
-        <FoundItemProvider>
-          <RecoveryRequestProvider>
+              <App />
 
-            <App />
-
-          </RecoveryRequestProvider>
-        </FoundItemProvider>
-      </LostItemProvider>
-
+            </RecoveryRequestProvider>
+          </FoundItemProvider>
+        </LostItemProvider>
+      </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>
 );

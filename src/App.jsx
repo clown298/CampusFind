@@ -10,6 +10,10 @@ import ReportLost from "./pages/ReportLost";
 import ReportFound from "./pages/ReportFound";
 import ItemDetails from "./pages/ItemDetails";
 import RecoveryRequestsPage from "./pages/RecoveryRequestsPage";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import MyReportsPage from "./pages/MyReportsPage";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
   return (
@@ -35,6 +39,16 @@ function App() {
           <Route
             path="/recovery-requests"
             element={<RecoveryRequestsPage />}
+          />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route
+            path="/my-reports"
+            element={
+              <ProtectedRoute>
+                <MyReportsPage />
+              </ProtectedRoute>
+            }
           />
         </Routes>
       </main>
