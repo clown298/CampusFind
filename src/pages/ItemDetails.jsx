@@ -5,6 +5,7 @@ import { FoundItemContext } from "../context/FoundItemContext";
 import PageShell from "../components/PageShell";
 import Button from "../components/Button";
 import EmptyState from "../components/EmptyState";
+import PossibleMatches from "../components/PossibleMatches";
 import { formatDisplayDate, getItemName, getItemDate } from "../utils/items";
 
 const CATEGORIES = [
@@ -132,6 +133,10 @@ function ItemDetails({ type }) {
     ? foundCtx.updateFoundItem
     : lostCtx.updateLostItem;
   const isLoading = isFound ? foundCtx.isLoading : lostCtx.isLoading;
+
+  const oppositeItems = isFound ? lostCtx.lostItems : foundCtx.foundItems;
+  const oppositeLoading = isFound ? lostCtx.isLoading : foundCtx.isLoading;
+  const oppositeLoadError = isFound ? lostCtx.loadError : foundCtx.loadError;
 
   const item = useMemo(() => {
     const found = items.find((i) => String(i.id) === String(id));
@@ -852,6 +857,16 @@ function ItemDetails({ type }) {
             )}
           </article>
         )}
+
+        {!editing ? (
+          <PossibleMatches
+            type={type}
+            item={item}
+            candidates={oppositeItems}
+            candidatesLoading={oppositeLoading}
+            candidatesLoadError={oppositeLoadError}
+          />
+        ) : null}
       </div>
     </PageShell>
   );
