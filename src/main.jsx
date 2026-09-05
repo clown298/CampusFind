@@ -7,6 +7,7 @@ import "./index.css";
 
 import LostItemProvider from "./context/LostItemContext";
 import FoundItemProvider from "./context/FoundItemContext";
+import RecoveryRequestProvider from "./context/RecoveryRequestContext";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
@@ -14,9 +15,11 @@ ReactDOM.createRoot(document.getElementById("root")).render(
 
       <LostItemProvider>
         <FoundItemProvider>
+          <RecoveryRequestProvider>
 
-          <App />
+            <App />
 
+          </RecoveryRequestProvider>
         </FoundItemProvider>
       </LostItemProvider>
 

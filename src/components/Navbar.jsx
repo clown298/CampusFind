@@ -5,6 +5,7 @@ const navItems = [
   { to: "/", label: "Home", end: true },
   { to: "/lost-items", label: "Lost Items" },
   { to: "/found-items", label: "Found Items" },
+  { to: "/recovery-requests", label: "Recovery Requests" },
 ];
 
 function navLinkClass({ isActive }) {

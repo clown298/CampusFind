@@ -84,6 +84,103 @@ function validateItem(body, dateField) {
 }
 
 // ---------------------------------------------------------------------------
+// Recovery request helpers (camelCase responses, status workflow)
+// ---------------------------------------------------------------------------
+
+const RECOVERY_SELECT = `
+  SELECT rr.id, rr.lost_item_id, rr.found_item_id,
+         rr.claimant_name, rr.claimant_contact, rr.claimant_message,
+         rr.status,
+         to_char(rr.created_at, 'YYYY-MM-DD HH24:MI') AS created_at,
+         to_char(rr.updated_at, 'YYYY-MM-DD HH24:MI') AS updated_at,
+         li.item_name AS lost_item_name, li.category AS lost_item_category,
+         li.location AS lost_item_location,
+         fi.item_name AS found_item_name, fi.category AS found_item_category,
+         fi.location AS found_item_location
+  FROM recovery_requests rr
+  JOIN lost_items li ON li.id = rr.lost_item_id
+  JOIN found_items fi ON fi.id = rr.found_item_id
+`
+
+const RECOVERY_STATUSES = new Set(['pending', 'approved', 'rejected', 'recovered'])
+
+// Only these forward transitions are allowed; a recovered request is final.
+const RECOVERY_TRANSITIONS = {
+  pending: ['approved', 'rejected'],
+  approved: ['recovered'],
+  rejected: [],
+  recovered: [],
+}
+
+function toRecoveryRequest(row) {
+  if (!row) return row
+  return {
+    id: row.id,
+    lostItemId: row.lost_item_id,
+    foundItemId: row.found_item_id,
+    claimantName: row.claimant_name,
+    claimantContact: row.claimant_contact,
+    claimantMessage: row.claimant_message,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    lostItem: {
+      id: row.lost_item_id,
+      itemName: row.lost_item_name,
+      category: row.lost_item_category,
+      location: row.lost_item_location,
+    },
+    foundItem: {
+      id: row.found_item_id,
+      itemName: row.found_item_name,
+      category: row.found_item_category,
+      location: row.found_item_location,
+    },
+  }
+}
+
+function validateRecoveryRequest(body) {
+  const errors = {}
+  body = body || {}
+
+  const lostItemId = Number(body.lostItemId)
+  const foundItemId = Number(body.foundItemId)
+
+  if (!body.lostItemId || !Number.isInteger(lostItemId) || lostItemId <= 0) {
+    errors.lostItemId = 'A valid lost item is required.'
+  }
+
+  if (!body.foundItemId || !Number.isInteger(foundItemId) || foundItemId <= 0) {
+    errors.foundItemId = 'A valid found item is required.'
+  }
+
+  if (typeof body.claimantName !== 'string' || !body.claimantName.trim()) {
+    errors.claimantName = 'Full name is required.'
+  } else if (body.claimantName.trim().length > 120) {
+    errors.claimantName = 'Full name must be 120 characters or fewer.'
+  }
+
+  if (typeof body.claimantContact !== 'string' || !body.claimantContact.trim()) {
+    errors.claimantContact = 'Contact details are required.'
+  } else if (body.claimantContact.trim().length > 120) {
+    errors.claimantContact = 'Contact details must be 120 characters or fewer.'
+  }
+
+  if (typeof body.claimantMessage !== 'string' || !body.claimantMessage.trim()) {
+    errors.claimantMessage = 'Please describe why this item is yours.'
+  } else if (body.claimantMessage.trim().length > 500) {
+    errors.claimantMessage = 'Message must be 500 characters or fewer.'
+  }
+
+  return errors
+}
+
+async function getRecoveryRequestById(id) {
+  const result = await pool.query(`${RECOVERY_SELECT} WHERE rr.id = $1`, [id])
+  return result.rows[0] || null
+}
+
+// ---------------------------------------------------------------------------
 // Health / utility routes
 // ---------------------------------------------------------------------------
 
@@ -322,18 +419,152 @@ app.delete('/api/found-items/:id', async (req, res) => {
 })
 
 // ---------------------------------------------------------------------------
+// Recovery Requests
+// ---------------------------------------------------------------------------
+
+app.get('/api/recovery-requests', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `${RECOVERY_SELECT} ORDER BY rr.created_at DESC, rr.id DESC`
+    )
+    res.json({ requests: result.rows.map(toRecoveryRequest) })
+  } catch (error) {
+    console.error('Error fetching recovery requests:', error.message)
+    res.status(500).json({ message: 'Failed to fetch recovery requests', error: error.message })
+  }
+})
+
+app.get('/api/recovery-requests/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    if (!Number.isInteger(Number(id)) || Number(id) <= 0) {
+      return res.status(400).json({ message: 'Invalid request ID.' })
+    }
+    const row = await getRecoveryRequestById(id)
+    if (!row) {
+      return res.status(404).json({ message: 'Recovery request not found.' })
+    }
+    res.json({ request: toRecoveryRequest(row) })
+  } catch (error) {
+    console.error('Error fetching recovery request:', error.message)
+    res.status(500).json({ message: 'Failed to fetch recovery request', error: error.message })
+  }
+})
+
+app.post('/api/recovery-requests', async (req, res) => {
+  const errors = validateRecoveryRequest(req.body)
+  if (Object.keys(errors).length > 0) {
+    return res.status(400).json({ message: 'Validation failed.', errors })
+  }
+
+  const { lostItemId, foundItemId } = req.body
+  const claimantName = req.body.claimantName.trim()
+  const claimantContact = req.body.claimantContact.trim()
+  const claimantMessage = req.body.claimantMessage.trim()
+
+  try {
+    const lostItem = await pool.query('SELECT id FROM lost_items WHERE id = $1', [lostItemId])
+    if (lostItem.rows.length === 0) {
+      return res.status(404).json({ message: 'Lost item not found.' })
+    }
+
+    const foundItem = await pool.query('SELECT id FROM found_items WHERE id = $1', [foundItemId])
+    if (foundItem.rows.length === 0) {
+      return res.status(404).json({ message: 'Found item not found.' })
+    }
+
+    const duplicate = await pool.query(
+      `SELECT id FROM recovery_requests
+       WHERE lost_item_id = $1 AND found_item_id = $2 AND status = 'pending'
+       LIMIT 1`,
+      [lostItemId, foundItemId]
+    )
+    if (duplicate.rows.length > 0) {
+      return res.status(400).json({
+        message: 'A recovery request for this lost and found item pair is already pending.',
+      })
+    }
+
+    const result = await pool.query(
+      `INSERT INTO recovery_requests
+         (lost_item_id, found_item_id, claimant_name, claimant_contact, claimant_message, status)
+       VALUES ($1, $2, $3, $4, $5, 'pending')
+       RETURNING id`,
+      [lostItemId, foundItemId, claimantName, claimantContact, claimantMessage]
+    )
+
+    const row = await getRecoveryRequestById(result.rows[0].id)
+    res.status(201).json({
+      message: 'Recovery request submitted successfully!',
+      request: toRecoveryRequest(row),
+    })
+  } catch (error) {
+    console.error('Error creating recovery request:', error.message)
+    res.status(500).json({ message: 'Failed to submit recovery request', error: error.message })
+  }
+})
+
+app.patch('/api/recovery-requests/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params
+    if (!Number.isInteger(Number(id)) || Number(id) <= 0) {
+      return res.status(400).json({ message: 'Invalid request ID.' })
+    }
+
+    const { status } = req.body || {}
+    if (typeof status !== 'string' || !RECOVERY_STATUSES.has(status)) {
+      return res.status(400).json({ message: 'Invalid recovery status.' })
+    }
+
+    const row = await getRecoveryRequestById(id)
+    if (!row) {
+      return res.status(404).json({ message: 'Recovery request not found.' })
+    }
+
+    const allowed = RECOVERY_TRANSITIONS[row.status] || []
+    if (!allowed.includes(status)) {
+      return res.status(400).json({
+        message: `Recovery request status cannot change from "${row.status}" to "${status}".`,
+      })
+    }
+
+    await pool.query(
+      `UPDATE recovery_requests
+       SET status = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2`,
+      [status, id]
+    )
+
+    const updated = await getRecoveryRequestById(id)
+    res.json({
+      message: `Recovery request marked as "${status}".`,
+      request: toRecoveryRequest(updated),
+    })
+  } catch (error) {
+    console.error('Error updating recovery request:', error.message)
+    res.status(500).json({ message: 'Failed to update recovery request', error: error.message })
+  }
+})
+
+// ---------------------------------------------------------------------------
 // Start server
 // ---------------------------------------------------------------------------
 
 const PORT = 5000
 
-ensureSchema()
-  .then(() => {
-    app.listen(PORT, () => {
-      console.log(`CampusFind Backend running on http://localhost:${PORT}`)
+// Keep `node server.js` working as the original entry point while also
+// allowing the app to be imported by the API tests.
+if (require.main === module) {
+  ensureSchema()
+    .then(() => {
+      app.listen(PORT, () => {
+        console.log(`CampusFind Backend running on http://localhost:${PORT}`)
+      })
     })
-  })
-  .catch((error) => {
-    console.error('Failed to initialize database schema:', error.message)
-    process.exit(1)
-  })
+    .catch((error) => {
+      console.error('Failed to initialize database schema:', error.message)
+      process.exit(1)
+    })
+}
+
+module.exports = app

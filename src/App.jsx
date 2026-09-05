@@ -9,6 +9,7 @@ import FoundItemsPage from "./pages/FoundItemsPage";
 import ReportLost from "./pages/ReportLost";
 import ReportFound from "./pages/ReportFound";
 import ItemDetails from "./pages/ItemDetails";
+import RecoveryRequestsPage from "./pages/RecoveryRequestsPage";
 
 function App() {
   return (
@@ -31,6 +32,10 @@ function App() {
           <Route path="/found-items/:id" element={<ItemDetails type="found" />} />
           <Route path="/report-lost" element={<ReportLost />} />
           <Route path="/report-found" element={<ReportFound />} />
+          <Route
+            path="/recovery-requests"
+            element={<RecoveryRequestsPage />}
+          />
         </Routes>
       </main>
 
