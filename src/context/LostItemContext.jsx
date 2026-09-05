@@ -3,40 +3,10 @@ import { apiRequest } from "../utils/api";
 
 export const LostItemContext = createContext();
 
-const STORAGE_KEY = "lostItems";
-
-function readCachedItems() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : null;
-    }
-  } catch {
-    // ignore corrupted or unavailable cache
-  }
-  return null;
-}
-
-function writeCachedItems(items) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    return true;
-  } catch (err) {
-    console.warn("[LostItemContext] LocalStorage cache write failed:", err);
-    return false;
-  }
-}
-
 function LostItemProvider({ children }) {
   const [lostItems, setLostItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
-  const [persistenceError, setPersistenceError] = useState(null);
-
-  function dismissPersistenceError() {
-    setPersistenceError(null);
-  }
 
   function dismissLoadError() {
     setLoadError(null);
@@ -55,17 +25,9 @@ function LostItemProvider({ children }) {
       } catch (err) {
         if (cancelled) return;
         console.error("[LostItemContext] Failed to load lost items from API:", err);
-        const cached = readCachedItems();
-        if (cached && cached.length > 0) {
-          setLostItems(cached);
-          setLoadError(
-            "Could not connect to the server. Showing lost items saved on this browser."
-          );
-        } else {
-          setLoadError(
-            "Could not load lost items. Please check your connection and try again."
-          );
-        }
+        setLoadError(
+          "Could not load lost items. Please check your connection and try again."
+        );
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -75,11 +37,6 @@ function LostItemProvider({ children }) {
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    if (isLoading) return;
-    writeCachedItems(lostItems);
-  }, [lostItems, isLoading]);
 
   async function addLostItem(itemData) {
     const data = await apiRequest("/api/lost-items", {
@@ -131,8 +88,6 @@ function LostItemProvider({ children }) {
         isLoading,
         loadError,
         dismissLoadError,
-        persistenceError,
-        dismissPersistenceError,
       }}
     >
       {children}

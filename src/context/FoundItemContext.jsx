@@ -3,40 +3,10 @@ import { apiRequest } from "../utils/api";
 
 export const FoundItemContext = createContext();
 
-const STORAGE_KEY = "foundItems";
-
-function readCachedItems() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : null;
-    }
-  } catch {
-    // ignore corrupted or unavailable cache
-  }
-  return null;
-}
-
-function writeCachedItems(items) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    return true;
-  } catch (err) {
-    console.warn("[FoundItemContext] LocalStorage cache write failed:", err);
-    return false;
-  }
-}
-
 function FoundItemProvider({ children }) {
   const [foundItems, setFoundItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
-  const [persistenceError, setPersistenceError] = useState(null);
-
-  function dismissPersistenceError() {
-    setPersistenceError(null);
-  }
 
   function dismissLoadError() {
     setLoadError(null);
@@ -55,17 +25,9 @@ function FoundItemProvider({ children }) {
       } catch (err) {
         if (cancelled) return;
         console.error("[FoundItemContext] Failed to load found items from API:", err);
-        const cached = readCachedItems();
-        if (cached && cached.length > 0) {
-          setFoundItems(cached);
-          setLoadError(
-            "Could not connect to the server. Showing found items saved on this browser."
-          );
-        } else {
-          setLoadError(
-            "Could not load found items. Please check your connection and try again."
-          );
-        }
+        setLoadError(
+          "Could not load found items. Please check your connection and try again."
+        );
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -75,11 +37,6 @@ function FoundItemProvider({ children }) {
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    if (isLoading) return;
-    writeCachedItems(foundItems);
-  }, [foundItems, isLoading]);
 
   async function addFoundItem(itemData) {
     const data = await apiRequest("/api/found-items", {
@@ -133,8 +90,6 @@ function FoundItemProvider({ children }) {
         isLoading,
         loadError,
         dismissLoadError,
-        persistenceError,
-        dismissPersistenceError,
       }}
     >
       {children}
