@@ -55,6 +55,12 @@ function toCamelCaseList(rows, map) {
 // Authentication (JWT in an httpOnly cookie)
 // ---------------------------------------------------------------------------
 
+// Fail fast in production: never fall back to the development secret.
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  console.error('JWT_SECRET is required when NODE_ENV=production.')
+  process.exit(1)
+}
+
 const JWT_SECRET = process.env.JWT_SECRET || 'campusfind-local-dev-secret'
 const COOKIE_NAME = 'campusfind_token'
 const TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
