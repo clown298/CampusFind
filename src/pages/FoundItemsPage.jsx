@@ -30,12 +30,13 @@ function FoundItemsPage() {
   const [sort, setSort] = useState("newest");
 
   const filteredItems = useMemo(() => {
+    const needle = search.trim().toLowerCase();
     const next = foundItems.filter((item) => {
-      const itemName = item.itemName || item.item_name || "";
-
-      const matchesSearch = itemName
-        .toLowerCase()
-        .includes(search.toLowerCase());
+      const matchesSearch =
+        !needle ||
+        [item.itemName, item.category, item.location]
+          .map((field) => (field || "").toLowerCase())
+          .some((field) => field.includes(needle));
 
       const matchesCategory =
         category === "All" || item.category === category;
@@ -64,7 +65,7 @@ function FoundItemsPage() {
   return (
     <PageShell
       title="Found Items"
-      description="Check belongings that have been found on campus. Search by name or filter by category to see if yours is listed."
+      description="Check belongings that have been found on campus. Search by item name, category, or location to see if yours is listed."
       meta={headerCount}
       action={
         <Button to="/report-found" variant="save" className="w-full sm:w-auto">
@@ -80,7 +81,7 @@ function FoundItemsPage() {
         sort={sort}
         onSortChange={setSort}
         searchLabel="Search found items"
-        searchPlaceholder="Search found items..."
+        searchPlaceholder="Search by name, category, or location..."
       />
 
       {loadError && (

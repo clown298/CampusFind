@@ -1,3 +1,4 @@
+const path = require('path')
 const express = require('express')
 const cors = require('cors')
 const morgan = require('morgan')
@@ -111,7 +112,7 @@ async function requireAuth(req, res, next) {
     }
 
     const result = await pool.query(
-      'SELECT id, name, email, token_version FROM users WHERE id = $1',
+      'SELECT id, name, email, token_version, created_at FROM users WHERE id = $1',
       [payload.sub]
     )
     if (result.rows.length === 0) {
@@ -267,7 +268,7 @@ app.post('/api/auth/logout', requireAuth, async (req, res) => {
 })
 
 app.get('/api/auth/me', requireAuth, (req, res) => {
-  res.json({ user: req.user })
+  res.json({ user: toSafeUser(req.user) })
 })
 
 // ---------------------------------------------------------------------------
@@ -414,9 +415,11 @@ async function getRecoveryRequestById(id) {
 // Health / utility routes
 // ---------------------------------------------------------------------------
 
-app.get('/', (req, res) => {
-  res.json({ message: 'CampusFind Backend is working!' })
-})
+if (process.env.NODE_ENV !== 'production') {
+  app.get('/', (req, res) => {
+    res.json({ message: 'CampusFind Backend is working!' })
+  })
+}
 
 app.get('/api/test-db', async (req, res) => {
   try {
@@ -831,7 +834,7 @@ app.get('/api/my-reports', requireAuth, async (req, res) => {
 // Start server
 // ---------------------------------------------------------------------------
 
-const PORT = 5000
+const PORT = process.env.PORT || 5000
 
 // Keep `node server.js` working as the original entry point while also
 // allowing the app to be imported by the API tests.
@@ -846,6 +849,17 @@ if (require.main === module) {
       console.error('Failed to initialize database schema:', error.message)
       process.exit(1)
     })
+}
+
+// In production, serve the built React app from /dist so the whole site
+// runs from a single server. API routes registered above take priority;
+// unknown non-API GET paths fall back to the SPA shell for client routing.
+if (process.env.NODE_ENV === 'production') {
+  const distDir = path.join(__dirname, '..', 'dist')
+  app.use(express.static(distDir))
+  app.get(/^\/(?!api(?:\/|$)).*/, (req, res) => {
+    res.sendFile(path.join(distDir, 'index.html'))
+  })
 }
 
 module.exports = app

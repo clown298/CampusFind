@@ -30,12 +30,13 @@ function LostItemsPage() {
   const [sort, setSort] = useState("newest");
 
   const filteredItems = useMemo(() => {
+    const needle = search.trim().toLowerCase();
     const next = lostItems.filter((item) => {
-      const itemName = item.itemName || item.item_name || "";
-
-      const matchesSearch = itemName
-        .toLowerCase()
-        .includes(search.toLowerCase());
+      const matchesSearch =
+        !needle ||
+        [item.itemName, item.category, item.location]
+          .map((field) => (field || "").toLowerCase())
+          .some((field) => field.includes(needle));
 
       const matchesCategory =
         category === "All" || item.category === category;
@@ -63,7 +64,7 @@ function LostItemsPage() {
   return (
     <PageShell
       title="Lost Items"
-      description="Browse items students have reported missing on campus. Search by name or narrow the list by category."
+      description="Browse items students have reported missing on campus. Search by item name, category, or location."
       meta={headerCount}
       action={
         <Button to="/report-lost" variant="primary" className="w-full sm:w-auto">
@@ -79,7 +80,7 @@ function LostItemsPage() {
         sort={sort}
         onSortChange={setSort}
         searchLabel="Search lost items"
-        searchPlaceholder="Search lost items..."
+        searchPlaceholder="Search by name, category, or location..."
       />
 
       {loadError && (
