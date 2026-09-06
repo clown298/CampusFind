@@ -92,6 +92,7 @@ function ReportLost() {
   const [success, setSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDraggingImage, setIsDraggingImage] = useState(false);
 
   function handleChange(e) {
     const { name, value } = e.target;
@@ -113,15 +114,13 @@ function ReportLost() {
     setSubmissionError("");
   }
 
-  function handleImageChange(e) {
-    const file = e.target.files && e.target.files[0];
+  function acceptImage(file) {
     if (!file) return;
 
     const validationError = validateImageFile(file);
     if (validationError) {
       setErrors((prev) => ({ ...prev, image: validationError }));
       setFormData((prev) => ({ ...prev, imageData: undefined }));
-      if (e.target) e.target.value = "";
       return;
     }
 
@@ -139,7 +138,21 @@ function ReportLost() {
       setErrors((prev) => ({ ...prev, image: "Could not read the image file." }));
     };
     reader.readAsDataURL(file);
+  }
+
+  function handleImageChange(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    acceptImage(file);
     if (e.target) e.target.value = "";
+  }
+
+  function handleImageDrop(e) {
+    e.preventDefault();
+    setIsDraggingImage(false);
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!file) return;
+    acceptImage(file);
   }
 
   function handleClearImage(e) {
@@ -561,7 +574,7 @@ function ReportLost() {
                 htmlFor="lost-image"
                 className="mb-1.5 block text-sm font-semibold text-ink"
               >
-                Photo (optional)
+                Item Image (optional)
               </label>
               {formData.imageData ? (
                 <div className="rounded-[6px] border border-line bg-paper p-3">
@@ -589,10 +602,25 @@ function ReportLost() {
                 <div>
                   <label
                     htmlFor="lost-image"
+                    onDragEnter={(e) => {
+                      e.preventDefault();
+                      setIsDraggingImage(true);
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "copy";
+                    }}
+                    onDragLeave={(e) => {
+                      e.preventDefault();
+                      setIsDraggingImage(false);
+                    }}
+                    onDrop={handleImageDrop}
                     className={`flex min-h-[120px] cursor-pointer flex-col items-center justify-center gap-2 rounded-[6px] border border-dashed px-4 py-6 text-center transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
                       errors.image
                         ? "border-lost bg-lost/5"
-                        : "border-line bg-surface hover:border-mute/50"
+                        : isDraggingImage
+                          ? "border-ink bg-paper"
+                          : "border-line bg-surface hover:border-mute/50"
                     }`}
                   >
                     <svg
@@ -612,7 +640,9 @@ function ReportLost() {
                     </svg>
                     <div>
                       <p className={`text-sm font-semibold ${errors.image ? "text-lost" : "text-ink"}`}>
-                        {errors.image ? errors.image : "Click to choose a photo"}
+                        {errors.image
+                          ? errors.image
+                          : "Drag and drop an image, or click to choose"}
                       </p>
                       <p className="mt-1 text-xs text-mute">
                         JPEG, PNG, or WebP. Maximum 500 KB.

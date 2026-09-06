@@ -624,7 +624,7 @@ function ItemDetails({ type }) {
                   htmlFor="edit-image"
                   className="mb-1.5 block text-sm font-semibold text-ink"
                 >
-                  Photo (optional)
+                  Item Image (optional)
                 </label>
                 {imageData ? (
                   <div className="rounded-[6px] border border-line bg-paper p-3">
