@@ -22,6 +22,25 @@ const RECOVERY_STATUS_NOTES = {
   recovered: "This recovery request was marked as recovered.",
 };
 
+const PROOF_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const PROOF_IMAGE_EXT = /\.(jpe?g|png|webp)$/i;
+const MAX_PROOF_IMAGES = 4;
+const MAX_PROOF_IMAGE_BYTES = 500 * 1024;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function validateProofImage(file) {
+  if (!file) return null;
+  const nameOk = PROOF_IMAGE_EXT.test(file.name || "");
+  const typeOk = !file.type || PROOF_IMAGE_TYPES.includes(file.type);
+  if (!nameOk && !typeOk) {
+    return "Only JPEG, PNG, and WebP images are allowed.";
+  }
+  if (file.size > MAX_PROOF_IMAGE_BYTES) {
+    return "Image must be smaller than 500 KB.";
+  }
+  return null;
+}
+
 function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
   const { createRecoveryRequest } = useContext(RecoveryRequestContext);
   const { isAuthenticated } = useContext(AuthContext);
@@ -30,8 +49,11 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
 
   const [open, setOpen] = useState(false);
   const [claimantName, setClaimantName] = useState("");
-  const [claimantContact, setClaimantContact] = useState("");
+  const [claimantEmail, setClaimantEmail] = useState("");
+  const [claimantPhone, setClaimantPhone] = useState("");
   const [claimantMessage, setClaimantMessage] = useState("");
+  const [proofImages, setProofImages] = useState([]);
+  const [proofError, setProofError] = useState("");
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
@@ -70,11 +92,44 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
   function validateForm() {
     const next = {};
     if (!claimantName.trim()) next.claimantName = "Full name is required.";
-    if (!claimantContact.trim())
-      next.claimantContact = "Contact details are required.";
+    if (!claimantEmail.trim()) next.claimantEmail = "Email is required.";
+    else if (!EMAIL_RE.test(claimantEmail.trim()))
+      next.claimantEmail = "Enter a valid email address.";
+    if (!claimantPhone.trim()) next.claimantPhone = "Phone number is required.";
     if (!claimantMessage.trim())
       next.claimantMessage = "Please describe why this item is yours.";
     return next;
+  }
+
+  function addProofFile(file) {
+    if (!file) return;
+    if (proofImages.length >= MAX_PROOF_IMAGES) {
+      setProofError(`You can add up to ${MAX_PROOF_IMAGES} proof images.`);
+      return;
+    }
+    const validationError = validateProofImage(file);
+    if (validationError) {
+      setProofError(validationError);
+      return;
+    }
+    setProofError("");
+    const reader = new FileReader();
+    reader.onload = () => {
+      setProofImages((prev) => [...prev, String(reader.result || "")]);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function handleProofInput(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    addProofFile(file);
+    if (e.target) e.target.value = "";
+  }
+
+  function removeProofImage(index) {
+    setProofImages((prev) => prev.filter((_, i) => i !== index));
+    setProofError("");
   }
 
   async function handleSubmit(e) {
@@ -90,13 +145,18 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
         lostItemId,
         foundItemId,
         claimantName: claimantName.trim(),
-        claimantContact: claimantContact.trim(),
+        claimantEmail: claimantEmail.trim(),
+        claimantPhone: claimantPhone.trim(),
         claimantMessage: claimantMessage.trim(),
+        proofImages,
       });
       setOpen(false);
       setClaimantName("");
-      setClaimantContact("");
+      setClaimantEmail("");
+      setClaimantPhone("");
       setClaimantMessage("");
+      setProofImages([]);
+      setProofError("");
     } catch (error) {
       console.error("Error submitting recovery request:", error);
       setSubmitError(
@@ -138,7 +198,7 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
             Request recovery of this item
           </p>
           <p className="mt-1 text-sm leading-6 text-mute">
-            Tell the campus office why this item is yours. Your request will be
+            Tell the item owner why this item is yours. Your request will be
             reviewed before the item is returned.
           </p>
 
@@ -184,40 +244,82 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
 
             <div>
               <label
-                htmlFor={`recovery-contact-${lostItemId}-${foundItemId}`}
+                htmlFor={`recovery-email-${lostItemId}-${foundItemId}`}
                 className="mb-1.5 block text-sm font-semibold text-ink"
               >
-                Contact Details
+                Email
                 <span className="ml-1 text-lost" aria-hidden="true">
                   *
                 </span>
                 <span className="sr-only">(required)</span>
               </label>
               <input
-                id={`recovery-contact-${lostItemId}-${foundItemId}`}
-                type="text"
-                value={claimantContact}
-                onChange={(e) => setClaimantContact(e.target.value)}
-                maxLength={120}
-                placeholder="Email, phone, or student ID"
-                aria-invalid={errors.claimantContact ? "true" : "false"}
+                id={`recovery-email-${lostItemId}-${foundItemId}`}
+                type="email"
+                value={claimantEmail}
+                onChange={(e) => setClaimantEmail(e.target.value)}
+                maxLength={255}
+                placeholder="you@campus.edu"
+                autoComplete="email"
+                aria-invalid={errors.claimantEmail ? "true" : "false"}
                 aria-describedby={
-                  errors.claimantContact
-                    ? `recovery-contact-error-${lostItemId}-${foundItemId}`
+                  errors.claimantEmail
+                    ? `recovery-email-error-${lostItemId}-${foundItemId}`
                     : undefined
                 }
                 className={`w-full min-h-[44px] rounded-[6px] border px-3.5 py-2.5 text-sm text-ink placeholder:text-mute/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper transition-colors duration-150 ${
-                  errors.claimantContact
+                  errors.claimantEmail
                     ? "border-lost bg-lost/5 focus-visible:ring-lost"
                     : "border-line bg-surface hover:border-mute/40"
                 }`}
               />
-              {errors.claimantContact && (
+              {errors.claimantEmail && (
                 <p
-                  id={`recovery-contact-error-${lostItemId}-${foundItemId}`}
+                  id={`recovery-email-error-${lostItemId}-${foundItemId}`}
                   className="mt-1.5 text-sm font-medium text-lost"
                 >
-                  {errors.claimantContact}
+                  {errors.claimantEmail}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label
+                htmlFor={`recovery-phone-${lostItemId}-${foundItemId}`}
+                className="mb-1.5 block text-sm font-semibold text-ink"
+              >
+                Phone Number
+                <span className="ml-1 text-lost" aria-hidden="true">
+                  *
+                </span>
+                <span className="sr-only">(required)</span>
+              </label>
+              <input
+                id={`recovery-phone-${lostItemId}-${foundItemId}`}
+                type="tel"
+                value={claimantPhone}
+                onChange={(e) => setClaimantPhone(e.target.value)}
+                maxLength={120}
+                placeholder="e.g. 9876543210"
+                autoComplete="tel"
+                aria-invalid={errors.claimantPhone ? "true" : "false"}
+                aria-describedby={
+                  errors.claimantPhone
+                    ? `recovery-phone-error-${lostItemId}-${foundItemId}`
+                    : undefined
+                }
+                className={`w-full min-h-[44px] rounded-[6px] border px-3.5 py-2.5 text-sm text-ink placeholder:text-mute/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper transition-colors duration-150 ${
+                  errors.claimantPhone
+                    ? "border-lost bg-lost/5 focus-visible:ring-lost"
+                    : "border-line bg-surface hover:border-mute/40"
+                }`}
+              />
+              {errors.claimantPhone && (
+                <p
+                  id={`recovery-phone-error-${lostItemId}-${foundItemId}`}
+                  className="mt-1.5 text-sm font-medium text-lost"
+                >
+                  {errors.claimantPhone}
                 </p>
               )}
             </div>
@@ -260,6 +362,96 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
                   {errors.claimantMessage}
                 </p>
               )}
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <label className="mb-1.5 block text-sm font-semibold text-ink">
+                  Proof Images (Optional)
+                </label>
+                <span className="mb-1.5 inline-flex items-center rounded-[4px] border border-line bg-surface px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.08em] text-mute">
+                  Optional
+                </span>
+              </div>
+              <p className="mb-3 text-sm leading-6 text-mute">
+                Upload photos that help prove ownership, such as a previous
+                photo or identifying feature.
+              </p>
+
+              {proofImages.length > 0 ? (
+                <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {proofImages.map((image, index) => (
+                    <li
+                      key={index}
+                      className="rounded-[6px] border border-line bg-surface p-2"
+                    >
+                      <img
+                        src={image}
+                        alt=""
+                        className="h-24 w-full rounded-[4px] object-cover bg-ink/5"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeProofImage(index)}
+                        className="mt-2 inline-flex min-h-[36px] w-full items-center justify-center rounded-[4px] border border-line bg-surface px-2 text-xs font-semibold text-ink transition-colors duration-150 hover:border-lost hover:text-lost focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+
+              {proofImages.length < MAX_PROOF_IMAGES ? (
+                <div>
+                  <label
+                    htmlFor={`recovery-proof-${lostItemId}-${foundItemId}`}
+                    className={`inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-[6px] border border-dashed px-4 text-sm font-semibold transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper ${
+                      proofError
+                        ? "border-lost bg-lost/5 text-lost"
+                        : "border-line bg-surface text-ink hover:border-mute/50"
+                    }`}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                      <circle cx="8.5" cy="8.5" r="1.5" />
+                      <polyline points="21 15 16 10 5 21" />
+                    </svg>
+                    Upload Proof Image
+                  </label>
+                  <input
+                    id={`recovery-proof-${lostItemId}-${foundItemId}`}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleProofInput}
+                    className="sr-only"
+                  />
+                </div>
+              ) : null}
+
+              {proofError ? (
+                <p
+                  id={`recovery-proof-error-${lostItemId}-${foundItemId}`}
+                  className="mt-1.5 text-sm font-medium text-lost"
+                  role="alert"
+                >
+                  {proofError}
+                </p>
+              ) : null}
+              <p className="mt-2 text-xs text-mute">
+                You can add up to {MAX_PROOF_IMAGES} images, each under 500 KB.
+                Proof images are only shown to the item owner and the claimant.
+              </p>
             </div>
           </div>
 

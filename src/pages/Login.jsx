@@ -186,7 +186,7 @@ function Login() {
             </Button>
             <Button
               type="submit"
-              variant="primary"
+              variant="ink"
               disabled={isSubmitting}
               aria-disabled={isSubmitting}
               className="w-full sm:w-auto"

@@ -15,7 +15,7 @@ app.use(
     credentials: true,
   })
 )
-app.use(express.json({ limit: '1mb' }))
+app.use(express.json({ limit: '5mb' }))
 app.use(morgan('dev'))
 
 // ---------------------------------------------------------------------------
@@ -325,12 +325,14 @@ function validateItem(body, dateField) {
 
 const RECOVERY_SELECT = `
   SELECT rr.id, rr.lost_item_id, rr.found_item_id,
-         rr.claimant_name, rr.claimant_contact, rr.claimant_message,
-         rr.claimant_user_id, rr.status,
+         rr.claimant_name, rr.claimant_contact, rr.claimant_email,
+         rr.claimant_message, rr.claimant_user_id, rr.status,
+         rr.proof_images,
          to_char(rr.created_at, 'YYYY-MM-DD HH24:MI') AS created_at,
          to_char(rr.updated_at, 'YYYY-MM-DD HH24:MI') AS updated_at,
          li.item_name AS lost_item_name, li.category AS lost_item_category,
          li.location AS lost_item_location,
+         li.user_id AS lost_owner_id,
          fi.item_name AS found_item_name, fi.category AS found_item_category,
          fi.location AS found_item_location
   FROM recovery_requests rr
@@ -356,11 +358,15 @@ function toRecoveryRequest(row) {
     foundItemId: row.found_item_id,
     claimantName: row.claimant_name,
     claimantContact: row.claimant_contact,
+    claimantEmail: row.claimant_email || '',
+    claimantPhone: row.claimant_contact || '',
     claimantMessage: row.claimant_message,
     claimantUserId: row.claimant_user_id,
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    proofImages: row.proof_images || [],
+    lostOwnerId: row.lost_owner_id,
     lostItem: {
       id: row.lost_item_id,
       itemName: row.lost_item_name,
@@ -375,6 +381,9 @@ function toRecoveryRequest(row) {
     },
   }
 }
+
+const MAX_PROOF_IMAGES = 4
+const MAX_PROOF_IMAGE_LENGTH = 900000
 
 function validateRecoveryRequest(body) {
   const errors = {}
@@ -397,10 +406,18 @@ function validateRecoveryRequest(body) {
     errors.claimantName = 'Full name must be 120 characters or fewer.'
   }
 
-  if (typeof body.claimantContact !== 'string' || !body.claimantContact.trim()) {
-    errors.claimantContact = 'Contact details are required.'
-  } else if (body.claimantContact.trim().length > 120) {
-    errors.claimantContact = 'Contact details must be 120 characters or fewer.'
+  if (typeof body.claimantEmail !== 'string' || !body.claimantEmail.trim()) {
+    errors.claimantEmail = 'Email is required.'
+  } else if (body.claimantEmail.trim().length > 255) {
+    errors.claimantEmail = 'Email must be 255 characters or fewer.'
+  } else if (!EMAIL_RE.test(body.claimantEmail.trim())) {
+    errors.claimantEmail = 'Enter a valid email address.'
+  }
+
+  if (typeof body.claimantPhone !== 'string' || !body.claimantPhone.trim()) {
+    errors.claimantPhone = 'Phone number is required.'
+  } else if (body.claimantPhone.trim().length > 120) {
+    errors.claimantPhone = 'Phone number must be 120 characters or fewer.'
   }
 
   if (typeof body.claimantMessage !== 'string' || !body.claimantMessage.trim()) {
@@ -409,7 +426,39 @@ function validateRecoveryRequest(body) {
     errors.claimantMessage = 'Message must be 500 characters or fewer.'
   }
 
+  if (body.proofImages !== undefined && body.proofImages !== null) {
+    if (!Array.isArray(body.proofImages)) {
+      errors.proofImages = 'Proof images must be a list of images.'
+    } else if (body.proofImages.length > MAX_PROOF_IMAGES) {
+      errors.proofImages = `You can attach up to ${MAX_PROOF_IMAGES} proof images.`
+    } else {
+      let badIndex = -1
+      for (let i = 0; i < body.proofImages.length; i += 1) {
+        const image = body.proofImages[i]
+        if (typeof image !== 'string' || image.length > MAX_PROOF_IMAGE_LENGTH) {
+          badIndex = i
+          break
+        }
+      }
+      if (badIndex !== -1) {
+        errors.proofImages = `Proof image at position ${badIndex + 1} is too large. Keep each image under 500 KB.`
+      }
+    }
+  }
+
   return errors
+}
+
+function canViewRecoveryRequest(reqUser, row) {
+  if (!row) return false
+  return (
+    reqUser.id === row.claimant_user_id || reqUser.id === row.lost_owner_id
+  )
+}
+
+function isRecoveryRequestOwner(reqUser, row) {
+  if (!row) return false
+  return Boolean(row.lost_owner_id) && reqUser.id === row.lost_owner_id
 }
 
 async function getRecoveryRequestById(id) {
@@ -687,10 +736,13 @@ app.delete('/api/found-items/:id', requireAuth, async (req, res) => {
 // Recovery Requests
 // ---------------------------------------------------------------------------
 
-app.get('/api/recovery-requests', async (req, res) => {
+app.get('/api/recovery-requests', requireAuth, async (req, res) => {
   try {
     const result = await pool.query(
-      `${RECOVERY_SELECT} ORDER BY rr.created_at DESC, rr.id DESC`
+      `${RECOVERY_SELECT}
+       WHERE rr.claimant_user_id = $1 OR li.user_id = $1
+       ORDER BY rr.created_at DESC, rr.id DESC`,
+      [req.user.id]
     )
     res.json({ requests: result.rows.map(toRecoveryRequest) })
   } catch (error) {
@@ -699,7 +751,7 @@ app.get('/api/recovery-requests', async (req, res) => {
   }
 })
 
-app.get('/api/recovery-requests/:id', async (req, res) => {
+app.get('/api/recovery-requests/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params
     if (!Number.isInteger(Number(id)) || Number(id) <= 0) {
@@ -708,6 +760,9 @@ app.get('/api/recovery-requests/:id', async (req, res) => {
     const row = await getRecoveryRequestById(id)
     if (!row) {
       return res.status(404).json({ message: 'Recovery request not found.' })
+    }
+    if (!canViewRecoveryRequest(req.user, row)) {
+      return res.status(403).json({ message: 'You do not have permission to view this request.' })
     }
     res.json({ request: toRecoveryRequest(row) })
   } catch (error) {
@@ -724,8 +779,10 @@ app.post('/api/recovery-requests', requireAuth, async (req, res) => {
 
   const { lostItemId, foundItemId } = req.body
   const claimantName = req.body.claimantName.trim()
-  const claimantContact = req.body.claimantContact.trim()
+  const claimantEmail = req.body.claimantEmail.trim().toLowerCase()
+  const claimantPhone = req.body.claimantPhone.trim()
   const claimantMessage = req.body.claimantMessage.trim()
+  const proofImages = Array.isArray(req.body.proofImages) ? req.body.proofImages : []
 
   try {
     const lostItem = await pool.query('SELECT id FROM lost_items WHERE id = $1', [lostItemId])
@@ -752,10 +809,20 @@ app.post('/api/recovery-requests', requireAuth, async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO recovery_requests
-         (lost_item_id, found_item_id, claimant_name, claimant_contact, claimant_message, claimant_user_id, status)
-       VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+         (lost_item_id, found_item_id, claimant_name, claimant_contact,
+          claimant_email, claimant_message, claimant_user_id, proof_images, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
        RETURNING id`,
-      [lostItemId, foundItemId, claimantName, claimantContact, claimantMessage, req.user.id]
+      [
+        lostItemId,
+        foundItemId,
+        claimantName,
+        claimantPhone,
+        claimantEmail,
+        claimantMessage,
+        req.user.id,
+        proofImages,
+      ]
     )
 
     const row = await getRecoveryRequestById(result.rows[0].id)
@@ -769,7 +836,7 @@ app.post('/api/recovery-requests', requireAuth, async (req, res) => {
   }
 })
 
-app.patch('/api/recovery-requests/:id/status', async (req, res) => {
+app.patch('/api/recovery-requests/:id/status', requireAuth, async (req, res) => {
   try {
     const { id } = req.params
     if (!Number.isInteger(Number(id)) || Number(id) <= 0) {
@@ -784,6 +851,10 @@ app.patch('/api/recovery-requests/:id/status', async (req, res) => {
     const row = await getRecoveryRequestById(id)
     if (!row) {
       return res.status(404).json({ message: 'Recovery request not found.' })
+    }
+
+    if (!isRecoveryRequestOwner(req.user, row)) {
+      return res.status(403).json({ message: 'You do not have permission to update this request.' })
     }
 
     const allowed = RECOVERY_TRANSITIONS[row.status] || []

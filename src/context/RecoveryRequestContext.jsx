@@ -12,35 +12,42 @@ function RecoveryRequestProvider({ children }) {
     setLoadError(null);
   }
 
+  async function fetchRequests() {
+    try {
+      const data = await apiRequest("/api/recovery-requests");
+      const requests =
+        data && Array.isArray(data.requests) ? data.requests : [];
+      setRecoveryRequests(requests);
+      setLoadError(null);
+    } catch (err) {
+      console.error(
+        "[RecoveryRequestContext] Failed to load recovery requests from API:",
+        err
+      );
+      setLoadError(
+        "Could not load recovery requests. Please check your connection and try again."
+      );
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      try {
-        const data = await apiRequest("/api/recovery-requests");
-        if (cancelled) return;
-        const requests =
-          data && Array.isArray(data.requests) ? data.requests : [];
-        setRecoveryRequests(requests);
-        setLoadError(null);
-      } catch (err) {
-        if (cancelled) return;
-        console.error(
-          "[RecoveryRequestContext] Failed to load recovery requests from API:",
-          err
-        );
-        setLoadError(
-          "Could not load recovery requests. Please check your connection and try again."
-        );
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
+      await fetchRequests();
+      if (cancelled) return;
+      setIsLoading(false);
     })();
 
     return () => {
       cancelled = true;
     };
   }, []);
+
+  async function refreshRequests() {
+    setLoadError(null);
+    await fetchRequests();
+  }
 
   async function createRecoveryRequest(payload) {
     const data = await apiRequest("/api/recovery-requests", {
@@ -85,6 +92,7 @@ function RecoveryRequestProvider({ children }) {
         isLoading,
         loadError,
         dismissLoadError,
+        refreshRequests,
         createRecoveryRequest,
         updateRecoveryRequestStatus,
       }}

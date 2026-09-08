@@ -349,7 +349,8 @@ describe('Phase 6 - Recovery requests', () => {
         lostItemId: lost.id,
         foundItemId: found.id,
         claimantName: account.user.name,
-        claimantContact: account.email,
+        claimantEmail: account.email,
+        claimantPhone: '9000000000',
         claimantMessage: 'This pair belongs to me.',
       },
     })
@@ -369,7 +370,8 @@ describe('Phase 6 - Recovery requests', () => {
         lostItemId: lost.id,
         foundItemId: found.id,
         claimantName: account.user.name,
-        claimantContact: account.email,
+        claimantEmail: account.email,
+        claimantPhone: '9000000000',
         claimantMessage: 'Claim ownership test.',
       },
     })
@@ -395,7 +397,8 @@ describe('Phase 6 - Recovery requests', () => {
         lostItemId: lost.id,
         foundItemId: found.id,
         claimantName: account.user.name,
-        claimantContact: account.email,
+        claimantEmail: account.email,
+        claimantPhone: '9000000000',
         claimantMessage: 'Transition test.',
       },
     })
@@ -404,6 +407,7 @@ describe('Phase 6 - Recovery requests', () => {
 
     const approved = await raw(`/api/recovery-requests/${created.data.request.id}/status`, {
       method: 'PATCH',
+      cookie: account.cookie,
       body: { status: 'approved' },
     })
     assert.equal(approved.status, 200)
@@ -411,6 +415,7 @@ describe('Phase 6 - Recovery requests', () => {
 
     const recovered = await raw(`/api/recovery-requests/${created.data.request.id}/status`, {
       method: 'PATCH',
+      cookie: account.cookie,
       body: { status: 'recovered' },
     })
     assert.equal(recovered.status, 200)
@@ -418,6 +423,7 @@ describe('Phase 6 - Recovery requests', () => {
 
     const again = await raw(`/api/recovery-requests/${created.data.request.id}/status`, {
       method: 'PATCH',
+      cookie: account.cookie,
       body: { status: 'approved' },
     })
     assert.equal(again.status, 400)

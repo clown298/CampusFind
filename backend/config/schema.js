@@ -142,6 +142,19 @@ async function ensureSchema() {
       'fk_recovery_requests_claimant_user'
     )
 
+    await ensureColumn(
+      client,
+      'recovery_requests',
+      'claimant_email',
+      'VARCHAR(255)'
+    )
+    await ensureColumn(
+      client,
+      'recovery_requests',
+      'proof_images',
+      "TEXT[] DEFAULT '{}'"
+    )
+
     await client.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS uq_recovery_pending_pair
         ON recovery_requests (lost_item_id, found_item_id)

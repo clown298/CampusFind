@@ -112,7 +112,7 @@ function Navbar() {
             </Link>
             <Link
               to="/report-found"
-              className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-[6px] border border-canopy bg-surface px-4 text-sm font-semibold text-canopy transition-colors duration-200 hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+              className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-[6px] bg-canopy px-4 text-sm font-semibold text-white transition-colors duration-200 hover:bg-canopy-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
             >
               Report Found
             </Link>
@@ -135,7 +135,7 @@ function Navbar() {
             ) : (
               <Link
                 to="/login"
-                className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-[6px] border border-ink bg-surface px-4 text-sm font-semibold text-ink transition-colors duration-200 hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+                className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-[6px] bg-ink px-4 text-sm font-semibold text-white transition-colors duration-200 hover:bg-ink-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
               >
                 Login
               </Link>
@@ -243,7 +243,7 @@ function Navbar() {
               <Link
                 to="/report-found"
                 onClick={closeMenu}
-                className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-[6px] border border-canopy bg-surface px-4 text-sm font-semibold text-canopy transition-colors duration-200 hover:bg-paper"
+                className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-[6px] bg-canopy px-4 text-sm font-semibold text-white transition-colors duration-200 hover:bg-canopy-hover"
               >
                 Report Found
               </Link>
@@ -259,7 +259,7 @@ function Navbar() {
                 <Link
                   to="/login"
                   onClick={closeMenu}
-                  className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-[6px] border border-ink bg-surface px-4 text-sm font-semibold text-ink transition-colors duration-200 hover:bg-paper"
+                  className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-[6px] bg-ink px-4 text-sm font-semibold text-white transition-colors duration-200 hover:bg-ink-hover"
                 >
                   Login
                 </Link>

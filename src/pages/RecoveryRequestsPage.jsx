@@ -1,5 +1,6 @@
-import { useContext, useState } from "react";
-import { Link } from "react-router-dom";
+import { useContext, useEffect, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { AuthContext } from "../context/AuthContext";
 import { RecoveryRequestContext } from "../context/RecoveryRequestContext";
 import PageShell from "../components/PageShell";
 import Button from "../components/Button";
@@ -9,7 +10,7 @@ const STATUS_META = {
   pending: {
     label: "Pending",
     classes: "border-line text-ink",
-    note: "Awaiting review by the campus office.",
+    note: "Awaiting review by the item owner.",
   },
   approved: {
     label: "Approved",
@@ -125,16 +126,92 @@ function RequestActions({ request }) {
 }
 
 function RecoveryRequestsPage() {
-  const { recoveryRequests, isLoading, loadError } = useContext(
-    RecoveryRequestContext
-  );
+  const { user, isAuthenticated, loading: authLoading } =
+    useContext(AuthContext);
+  const { recoveryRequests, isLoading, loadError, refreshRequests } =
+    useContext(RecoveryRequestContext);
+  const location = useLocation();
+
+  useEffect(() => {
+    if (isAuthenticated && loadError && refreshRequests) {
+      refreshRequests().catch(() => {});
+    }
+  }, [isAuthenticated, loadError, refreshRequests]);
 
   const countLabel = recoveryRequests.length === 1 ? "request" : "requests";
+
+  if (authLoading) {
+    return (
+      <PageShell
+        title="Recovery Requests"
+        description="Review claims made against your lost items."
+      >
+        <div
+          className="rounded-[8px] border border-line bg-surface px-5 py-10 text-center sm:px-8"
+          role="status"
+        >
+          <p className="text-sm font-semibold text-mute">
+            Checking your session…
+          </p>
+        </div>
+      </PageShell>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <PageShell
+        title="Recovery Requests"
+        description="Review claims made against your lost items."
+      >
+        <div className="mx-auto w-full max-w-2xl">
+          <div className="rounded-[6px] border border-line bg-surface p-5 text-center sm:p-8">
+            <h2 className="font-serif text-2xl font-semibold text-ink">
+              Sign in to review recovery requests
+            </h2>
+            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-mute">
+              Recovery requests contain private claimant details, so they are
+              only visible to the owner of the lost item and the claimant who
+              submitted them.
+            </p>
+            <div className="mt-6 flex flex-col-reverse items-stretch justify-center gap-3 sm:flex-row">
+              <Button
+                variant="ink"
+                to="/login"
+                state={{
+                  from: {
+                    pathname: location.pathname,
+                    search: location.search,
+                  },
+                }}
+                className="w-full sm:w-auto"
+              >
+                Login
+              </Button>
+              <Button
+                variant="secondary"
+                to="/register"
+                state={{
+                  from: {
+                    pathname: location.pathname,
+                    search: location.search,
+                  },
+                }}
+                className="w-full sm:w-auto"
+              >
+                Register
+              </Button>
+            </div>
+          </div>
+        </div>
+      </PageShell>
+    );
+  }
 
   return (
     <PageShell
       title="Recovery Requests"
-      description="Review claims made against possible matches. Approve a request when the claimant proves ownership, or reject it. Approved requests can be marked as recovered after the item is returned."
+      description="Review requests submitted against your lost items. Approve a request when the claimant proves ownership, or reject it. Approved requests can be marked recovered after the item is returned."
       meta={`${recoveryRequests.length} ${countLabel}`}
     >
       {loadError && (
@@ -159,12 +236,22 @@ function RecoveryRequestsPage() {
       ) : recoveryRequests.length === 0 ? (
         <EmptyState
           title="No recovery requests yet"
-          description="When a student submits a recovery request from a possible match on an item page, it will appear here for review."
+          description="When another student submits a recovery request against one of your lost items, it will appear here for review."
         />
       ) : (
         <div className="space-y-5">
           {recoveryRequests.map((request) => {
             const meta = STATUS_META[request.status] || STATUS_META.pending;
+            const isOwner = Boolean(
+              user &&
+                request.lostOwnerId &&
+                String(request.lostOwnerId) === String(user.id)
+            );
+            const isClaimant = Boolean(
+              user &&
+                request.claimantUserId &&
+                String(request.claimantUserId) === String(user.id)
+            );
             return (
               <article
                 key={request.id}
@@ -193,17 +280,52 @@ function RecoveryRequestsPage() {
                   <p className="mt-1.5 text-base font-medium text-ink">
                     {request.claimantName}
                   </p>
-                  <p className="mt-0.5 text-sm text-mute">
-                    {request.claimantContact}
-                  </p>
+                  {request.claimantEmail ? (
+                    <p className="mt-0.5 break-words text-sm text-mute">
+                      {request.claimantEmail}
+                    </p>
+                  ) : null}
+                  {request.claimantPhone ? (
+                    <p className="mt-0.5 text-sm text-mute">
+                      {request.claimantPhone}
+                    </p>
+                  ) : null}
                   <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-ink">
                     {request.claimantMessage}
                   </p>
+                  {request.proofImages && request.proofImages.length > 0 ? (
+                    <div className="mt-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.1em] text-mute">
+                        Proof images
+                      </p>
+                      <ul className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        {request.proofImages.map((image, index) => (
+                          <li
+                            key={index}
+                            className="overflow-hidden rounded-[4px] border border-line bg-surface"
+                          >
+                            <img
+                              src={image}
+                              alt={`Proof of ownership ${index + 1}`}
+                              className="h-28 w-full object-cover bg-ink/5"
+                            />
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                 </div>
 
                 <p className="mt-4 text-sm leading-6 text-mute">{meta.note}</p>
 
-                <RequestActions request={request} />
+                {isOwner ? (
+                  <RequestActions request={request} />
+                ) : isClaimant ? (
+                  <p className="mt-4 text-sm leading-6 text-mute">
+                    This is a request you submitted. Status updates are handled
+                    by the lost item owner.
+                  </p>
+                ) : null}
               </article>
             );
           })}

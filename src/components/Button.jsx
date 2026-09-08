@@ -13,6 +13,7 @@ function Button({
     secondary:
       "border border-ink bg-surface text-ink hover:bg-paper",
     save: "bg-canopy text-white hover:bg-canopy-hover",
+    ink: "bg-ink text-white hover:bg-ink-hover",
     danger:
       "border border-lost bg-surface text-lost hover:bg-paper",
     dangerSolid: "bg-lost text-white hover:bg-[#732626]",
