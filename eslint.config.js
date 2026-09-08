@@ -18,4 +18,21 @@ export default defineConfig([
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
   },
+  {
+    // Backend runs in Node as CommonJS; don't lint it with browser/ESM globals.
+    files: ['backend/**/*.js'],
+    languageOptions: {
+      globals: { ...globals.commonjs, ...globals.node },
+      sourceType: 'commonjs',
+    },
+  },
+  {
+    // Context files intentionally export a Provider component plus a context/
+    // hook pair from one file; this is the standard React pattern, so Fast
+    // Refresh's "only-export-components" rule does not apply to them.
+    files: ['src/context/**/*.jsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])

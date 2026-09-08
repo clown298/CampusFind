@@ -412,6 +412,7 @@ function ItemDetails({ type }) {
                   type="text"
                   value={itemName}
                   onChange={(e) => setItemName(e.target.value)}
+                  maxLength={100}
                   aria-invalid={errors.itemName ? "true" : "false"}
                   aria-describedby={
                     errors.itemName ? "edit-itemName-error" : undefined
@@ -526,6 +527,7 @@ function ItemDetails({ type }) {
                   type="text"
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
+                  maxLength={150}
                   aria-invalid={errors.location ? "true" : "false"}
                   aria-describedby={
                     errors.location ? "edit-location-error" : undefined

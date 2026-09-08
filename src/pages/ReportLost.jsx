@@ -340,6 +340,7 @@ function ReportLost() {
                 value={formData.itemName}
                 onChange={handleChange}
                 placeholder="e.g. Blue leather wallet"
+                maxLength={100}
                 autoComplete="off"
                 aria-invalid={errors.itemName ? "true" : "false"}
                 aria-describedby={errors.itemName ? "itemName-error" : undefined}
@@ -468,6 +469,7 @@ function ReportLost() {
                 value={formData.location}
                 onChange={handleChange}
                 placeholder="e.g. Main Library, second floor reading area"
+                maxLength={150}
                 autoComplete="off"
                 aria-invalid={errors.location ? "true" : "false"}
                 aria-describedby={errors.location ? "location-error" : undefined}

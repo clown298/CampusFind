@@ -100,6 +100,7 @@ function ItemCard({ type, item, onUpdate, onDelete }) {
               type="text"
               value={itemName}
               onChange={(e) => setItemName(e.target.value)}
+              maxLength={100}
               className="mt-2 h-11 w-full rounded-[6px] border border-line bg-paper px-3 text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
             />
           </label>
@@ -110,6 +111,7 @@ function ItemCard({ type, item, onUpdate, onDelete }) {
               type="text"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
+              maxLength={50}
               className="mt-2 h-11 w-full rounded-[6px] border border-line bg-paper px-3 text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
             />
           </label>

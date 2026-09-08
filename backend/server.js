@@ -133,7 +133,7 @@ async function requireAuth(req, res, next) {
     next()
   } catch (error) {
     console.error('Authentication error:', error.message)
-    res.status(500).json({ message: 'Authentication check failed.', error: error.message })
+    res.status(500).json({ message: 'Authentication check failed.' })
   }
 }
 
@@ -216,7 +216,7 @@ app.post('/api/auth/register', async (req, res) => {
     })
   } catch (error) {
     console.error('Registration error:', error.message)
-    res.status(500).json({ message: 'Failed to create account', error: error.message })
+    res.status(500).json({ message: 'Failed to create account' })
   }
 })
 
@@ -253,7 +253,7 @@ app.post('/api/auth/login', async (req, res) => {
     res.json({ message: 'Logged in successfully!', user: toSafeUser(user) })
   } catch (error) {
     console.error('Login error:', error.message)
-    res.status(500).json({ message: 'Failed to log in', error: error.message })
+    res.status(500).json({ message: 'Failed to log in' })
   }
 })
 
@@ -267,7 +267,7 @@ app.post('/api/auth/logout', requireAuth, async (req, res) => {
     )
   } catch (error) {
     console.error('Logout error:', error.message)
-    return res.status(500).json({ message: 'Failed to log out', error: error.message })
+    return res.status(500).json({ message: 'Failed to log out' })
   }
   clearAuthCookie(res)
   res.json({ message: 'Logged out successfully!' })
@@ -281,15 +281,26 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
 // Validation helpers
 // ---------------------------------------------------------------------------
 
+// These match the database column definitions (see config/schema.js).
+// Keep overlong input out of PostgreSQL so it becomes a clean 400.
+const ITEM_NAME_MAX = 100
+const ITEM_CATEGORY_MAX = 50
+const ITEM_LOCATION_MAX = 150
+const ITEM_CONTACT_MAX = 100
+
 function validateItem(body, dateField) {
   const errors = {}
 
   if (!body.itemName || typeof body.itemName !== 'string' || !body.itemName.trim()) {
     errors.itemName = 'Item name is required.'
+  } else if (body.itemName.trim().length > ITEM_NAME_MAX) {
+    errors.itemName = `Item name must be ${ITEM_NAME_MAX} characters or fewer.`
   }
 
   if (!body.category || typeof body.category !== 'string' || !body.category.trim()) {
     errors.category = 'Category is required.'
+  } else if (body.category.trim().length > ITEM_CATEGORY_MAX) {
+    errors.category = `Category must be ${ITEM_CATEGORY_MAX} characters or fewer.`
   }
 
   if (!body.description || typeof body.description !== 'string' || !body.description.trim()) {
@@ -298,6 +309,8 @@ function validateItem(body, dateField) {
 
   if (!body.location || typeof body.location !== 'string' || !body.location.trim()) {
     errors.location = 'Location is required.'
+  } else if (body.location.trim().length > ITEM_LOCATION_MAX) {
+    errors.location = `Location must be ${ITEM_LOCATION_MAX} characters or fewer.`
   }
 
   if (!body[dateField]) {
@@ -308,6 +321,8 @@ function validateItem(body, dateField) {
 
   if (!body.contact || typeof body.contact !== 'string' || !body.contact.trim()) {
     errors.contact = 'Contact details are required.'
+  } else if (body.contact.trim().length > ITEM_CONTACT_MAX) {
+    errors.contact = `Contact details must be ${ITEM_CONTACT_MAX} characters or fewer.`
   }
 
   if (body.imageData !== undefined && body.imageData !== null && body.imageData !== '') {
@@ -482,7 +497,7 @@ app.get('/api/test-db', async (req, res) => {
     res.json({ message: 'Database connected successfully!', time: result.rows[0].now })
   } catch (error) {
     console.error('Database error:', error.message)
-    res.status(500).json({ message: 'Database connection failed', error: error.message })
+    res.status(500).json({ message: 'Database connection failed' })
   }
 })
 
@@ -496,7 +511,7 @@ app.get('/api/lost-items', async (req, res) => {
     res.json({ items: toCamelCaseList(result.rows, LOST_MAP) })
   } catch (error) {
     console.error('Error fetching lost items:', error.message)
-    res.status(500).json({ message: 'Failed to fetch lost items', error: error.message })
+    res.status(500).json({ message: 'Failed to fetch lost items' })
   }
 })
 
@@ -513,7 +528,7 @@ app.get('/api/lost-items/:id', async (req, res) => {
     res.json({ item: toCamelCase(result.rows[0], LOST_MAP) })
   } catch (error) {
     console.error('Error fetching lost item:', error.message)
-    res.status(500).json({ message: 'Failed to fetch lost item', error: error.message })
+    res.status(500).json({ message: 'Failed to fetch lost item' })
   }
 })
 
@@ -539,7 +554,7 @@ app.post('/api/lost-items', requireAuth, async (req, res) => {
     })
   } catch (error) {
     console.error('Error saving lost item:', error.message)
-    res.status(500).json({ message: 'Failed to save lost item', error: error.message })
+    res.status(500).json({ message: 'Failed to save lost item' })
   }
 })
 
@@ -581,7 +596,7 @@ app.put('/api/lost-items/:id', requireAuth, async (req, res) => {
     res.json({ message: 'Lost item updated successfully!', item: toCamelCase(result.rows[0], LOST_MAP) })
   } catch (error) {
     console.error('Error updating lost item:', error.message)
-    res.status(500).json({ message: 'Failed to update lost item', error: error.message })
+    res.status(500).json({ message: 'Failed to update lost item' })
   }
 })
 
@@ -605,7 +620,7 @@ app.delete('/api/lost-items/:id', requireAuth, async (req, res) => {
     res.json({ message: 'Lost item deleted successfully.' })
   } catch (error) {
     console.error('Error deleting lost item:', error.message)
-    res.status(500).json({ message: 'Failed to delete lost item', error: error.message })
+    res.status(500).json({ message: 'Failed to delete lost item' })
   }
 })
 
@@ -619,7 +634,7 @@ app.get('/api/found-items', async (req, res) => {
     res.json({ items: toCamelCaseList(result.rows, FOUND_MAP) })
   } catch (error) {
     console.error('Error fetching found items:', error.message)
-    res.status(500).json({ message: 'Failed to fetch found items', error: error.message })
+    res.status(500).json({ message: 'Failed to fetch found items' })
   }
 })
 
@@ -636,7 +651,7 @@ app.get('/api/found-items/:id', async (req, res) => {
     res.json({ item: toCamelCase(result.rows[0], FOUND_MAP) })
   } catch (error) {
     console.error('Error fetching found item:', error.message)
-    res.status(500).json({ message: 'Failed to fetch found item', error: error.message })
+    res.status(500).json({ message: 'Failed to fetch found item' })
   }
 })
 
@@ -662,7 +677,7 @@ app.post('/api/found-items', requireAuth, async (req, res) => {
     })
   } catch (error) {
     console.error('Error saving found item:', error.message)
-    res.status(500).json({ message: 'Failed to save found item', error: error.message })
+    res.status(500).json({ message: 'Failed to save found item' })
   }
 })
 
@@ -704,7 +719,7 @@ app.put('/api/found-items/:id', requireAuth, async (req, res) => {
     res.json({ message: 'Found item updated successfully!', item: toCamelCase(result.rows[0], FOUND_MAP) })
   } catch (error) {
     console.error('Error updating found item:', error.message)
-    res.status(500).json({ message: 'Failed to update found item', error: error.message })
+    res.status(500).json({ message: 'Failed to update found item' })
   }
 })
 
@@ -728,7 +743,7 @@ app.delete('/api/found-items/:id', requireAuth, async (req, res) => {
     res.json({ message: 'Found item deleted successfully.' })
   } catch (error) {
     console.error('Error deleting found item:', error.message)
-    res.status(500).json({ message: 'Failed to delete found item', error: error.message })
+    res.status(500).json({ message: 'Failed to delete found item' })
   }
 })
 
@@ -747,7 +762,7 @@ app.get('/api/recovery-requests', requireAuth, async (req, res) => {
     res.json({ requests: result.rows.map(toRecoveryRequest) })
   } catch (error) {
     console.error('Error fetching recovery requests:', error.message)
-    res.status(500).json({ message: 'Failed to fetch recovery requests', error: error.message })
+    res.status(500).json({ message: 'Failed to fetch recovery requests' })
   }
 })
 
@@ -767,7 +782,7 @@ app.get('/api/recovery-requests/:id', requireAuth, async (req, res) => {
     res.json({ request: toRecoveryRequest(row) })
   } catch (error) {
     console.error('Error fetching recovery request:', error.message)
-    res.status(500).json({ message: 'Failed to fetch recovery request', error: error.message })
+    res.status(500).json({ message: 'Failed to fetch recovery request' })
   }
 })
 
@@ -832,7 +847,7 @@ app.post('/api/recovery-requests', requireAuth, async (req, res) => {
     })
   } catch (error) {
     console.error('Error creating recovery request:', error.message)
-    res.status(500).json({ message: 'Failed to submit recovery request', error: error.message })
+    res.status(500).json({ message: 'Failed to submit recovery request' })
   }
 })
 
@@ -878,7 +893,7 @@ app.patch('/api/recovery-requests/:id/status', requireAuth, async (req, res) => 
     })
   } catch (error) {
     console.error('Error updating recovery request:', error.message)
-    res.status(500).json({ message: 'Failed to update recovery request', error: error.message })
+    res.status(500).json({ message: 'Failed to update recovery request' })
   }
 })
 
@@ -903,7 +918,7 @@ app.get('/api/my-reports', requireAuth, async (req, res) => {
     })
   } catch (error) {
     console.error('Error fetching my reports:', error.message)
-    res.status(500).json({ message: 'Failed to fetch your reports', error: error.message })
+    res.status(500).json({ message: 'Failed to fetch your reports' })
   }
 })
 

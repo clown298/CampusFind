@@ -340,6 +340,7 @@ function ReportFound() {
                 value={formData.itemName}
                 onChange={handleChange}
                 placeholder="e.g. Black smartphone"
+                maxLength={100}
                 autoComplete="off"
                 aria-invalid={errors.itemName ? "true" : "false"}
                 aria-describedby={errors.itemName ? "itemName-error" : undefined}
@@ -468,6 +469,7 @@ function ReportFound() {
                 value={formData.location}
                 onChange={handleChange}
                 placeholder="e.g. Classroom 204, near the projector"
+                maxLength={150}
                 autoComplete="off"
                 aria-invalid={errors.location ? "true" : "false"}
                 aria-describedby={errors.location ? "location-error" : undefined}

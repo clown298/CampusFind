@@ -12,7 +12,6 @@ let ownerCookie = null
 let strangerCookie = null
 let claimantUserId = null
 let ownerUserId = null
-let strangerUserId = null
 const createdItemIds = { lost: [], found: [] }
 const createdRequestIds = []
 const createdUserIds = []
@@ -99,7 +98,6 @@ before(async () => {
   ownerCookie = owner.cookie
 
   const stranger = await registerUser('Recovery Stranger')
-  strangerUserId = stranger.id
   strangerCookie = stranger.cookie
 })
 
