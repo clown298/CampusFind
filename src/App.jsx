@@ -2,6 +2,7 @@ import { Routes, Route } from "react-router-dom";
 
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
+import ScrollToTop from "./components/ScrollToTop";
 
 import Home from "./pages/Home";
 import LostItemsPage from "./pages/LostItemsPage";
@@ -13,6 +14,7 @@ import RecoveryRequestsPage from "./pages/RecoveryRequestsPage";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import MyReportsPage from "./pages/MyReportsPage";
+import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
@@ -24,6 +26,8 @@ function App() {
       >
         Skip to main content
       </a>
+
+      <ScrollToTop />
 
       <Navbar />
 
@@ -50,6 +54,7 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
 

@@ -76,7 +76,7 @@ function RequestActions({ request }) {
 
   if (request.status === "pending") {
     return (
-      <div className="mt-5 flex flex-col-reverse items-stretch gap-3 sm:flex-row">
+      <div className="mt-5 flex flex-col items-stretch gap-3 sm:flex-row">
         <Button
           variant="save"
           disabled={busy !== null}
