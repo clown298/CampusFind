@@ -88,7 +88,7 @@ const TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
-  sameSite: 'lax',
+  sameSite: 'none',
   secure: process.env.NODE_ENV === 'production',
   path: '/',
   maxAge: TOKEN_MAX_AGE_MS,
