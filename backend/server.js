@@ -506,11 +506,9 @@ async function getRecoveryRequestById(id) {
 // Health / utility routes
 // ---------------------------------------------------------------------------
 
-if (process.env.NODE_ENV !== 'production') {
-  app.get('/', (req, res) => {
-    res.json({ message: 'CampusFind Backend is working!' })
-  })
-}
+app.get('/', (req, res) => {
+  res.json({ message: 'CampusFind Backend is working!' })
+})
 
 if (process.env.NODE_ENV !== 'production') {
   app.get('/api/test-db', async (req, res) => {
@@ -966,15 +964,5 @@ if (require.main === module) {
     })
 }
 
-// In production, serve the built React app from /dist so the whole site
-// runs from a single server. API routes registered above take priority;
-// unknown non-API GET paths fall back to the SPA shell for client routing.
-if (process.env.NODE_ENV === 'production') {
-  const distDir = path.join(__dirname, '..', 'dist')
-  app.use(express.static(distDir))
-  app.get(/^\/(?!api(?:\/|$)).*/, (req, res) => {
-    res.sendFile(path.join(distDir, 'index.html'))
-  })
-}
-
 module.exports = app
+
