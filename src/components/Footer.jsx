@@ -1,85 +1,115 @@
 import { Link } from "react-router-dom";
+import BrandMark from "./BrandMark";
 
-const footerLinks = [
-  { to: "/", label: "Home" },
+const itemLinks = [
   { to: "/lost-items", label: "Lost Items" },
   { to: "/found-items", label: "Found Items" },
   { to: "/report-lost", label: "Report Lost" },
   { to: "/report-found", label: "Report Found" },
 ];
 
-const linkClassName =
-  "inline-flex min-h-[44px] items-center text-[0.95rem] text-ink underline-offset-4 transition-colors duration-200 hover:text-brick hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper";
+const accountLinks = [
+  { to: "/my-reports", label: "My Reports" },
+  { to: "/recovery-requests", label: "Recovery Requests" },
+  { to: "/login", label: "Login" },
+  { to: "/register", label: "Create Account" },
+];
 
 function Footer() {
   return (
-    <footer className="border-t border-line bg-paper text-ink">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <div className="grid grid-cols-1 md:grid-cols-3">
-          <section className="border-b border-line py-10 md:border-b-0 md:border-r md:py-12 md:pr-10">
-            <p className="font-serif text-3xl font-semibold leading-tight text-ink">
-              CampusFind
+    <footer className="border-t border-white/10 bg-ink text-frost">
+      <div className="mx-auto w-full max-w-[1440px] px-4 py-10 sm:px-8">
+        <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-12">
+          <div className="sm:col-span-2 lg:col-span-6">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-2.5 rounded-control pr-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+            >
+              <span className="flex h-10 w-10 items-center justify-center rounded-control bg-white text-ink">
+                <BrandMark size={24} />
+              </span>
+              <span className="font-display text-lg font-bold leading-none text-white">
+                CampusFind
+              </span>
+            </Link>
+
+            <p className="mt-4 text-sm font-semibold text-white">
+              Campus Lost &amp; Found
             </p>
-            <p className="mt-2 text-sm font-semibold text-canopy">
-              GCOEC Chandrapur
+
+            <p className="mt-1 text-[clamp(0.75rem,3.6vw,0.875rem)] text-white/65">
+              Government College of Engineering, Chandrapur
             </p>
-            <p className="mt-1 text-xs font-medium uppercase tracking-[0.14em] text-mute">
-              Campus lost & found
+
+            <address className="mt-1.5 max-w-sm text-sm not-italic leading-6 text-white/55">
+              Ballarshah Bypass Road, Babupeth,
+              <br />
+              Chandrapur, Maharashtra – 442403, India
+            </address>
+
+            <a
+              href="mailto:gcoec@campusfind.com"
+              className="mt-4 inline-flex min-h-[40px] items-center text-sm font-medium text-white/70 transition-colors duration-200 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+            >
+              gcoec@campusfind.com
+            </a>
+
+            <p className="mt-5 max-w-md text-sm leading-6 text-white/50">
+              A campus registry for reporting, matching, and recovering lost and
+              found items across GCOEC.
             </p>
-            <p className="mt-5 max-w-sm text-sm leading-6 text-mute">
-              Helping students find lost belongings and return found items
-              across campus.
-            </p>
-          </section>
+          </div>
 
           <nav
-            className="border-b border-line py-10 md:border-b-0 md:border-r md:py-12 md:px-10"
-            aria-label="Footer"
+            className="lg:col-span-3"
+            aria-label="Items"
           >
-            <h2 className="font-serif text-lg font-semibold text-ink">
-              Quick Links
+            <h2 className="type-eyebrow text-white/60">
+              Items
             </h2>
-            <div className="mt-2 h-px w-10 bg-brick" aria-hidden="true" />
-            <ul className="mt-4">
-              {footerLinks.map((item) => (
-                <li key={item.to}>
-                  <Link to={item.to} className={linkClassName}>
-                    {item.label}
+
+            <ul className="mt-3 space-y-1">
+              {itemLinks.map((link) => (
+                <li key={link.label}>
+                  <Link
+                    to={link.to}
+                    className="inline-flex min-h-[40px] items-center text-sm text-white/70 transition-colors duration-200 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+                  >
+                    {link.label}
                   </Link>
                 </li>
               ))}
             </ul>
           </nav>
 
-          <section className="py-10 md:py-12 md:pl-10">
-            <h2 className="font-serif text-lg font-semibold text-ink">
-              Contact Us
+          <nav
+            className="lg:col-span-3"
+            aria-label="Account"
+          >
+            <h2 className="type-eyebrow text-white/60">
+              Account
             </h2>
-            <div className="mt-2 h-px w-10 bg-brick" aria-hidden="true" />
-            <address className="mt-4 not-italic text-sm leading-6 text-mute">
-              Government College of Engineering,
-              <br />
-              Chandrapur, Maharashtra - 442403
-            </address>
-            <p className="mt-5 text-sm leading-6">
-              <span className="block text-xs font-semibold uppercase tracking-[0.12em] text-mute">
-                Email
-              </span>
-              <a
-                href="mailto:campusfind@gcoec.ac.in"
-                className="mt-1 inline-flex min-h-[44px] items-center break-all text-[0.95rem] text-ink underline-offset-4 transition-colors duration-200 hover:text-brick hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
-              >
-                campusfind@gcoec.ac.in
-              </a>
-            </p>
-          </section>
-        </div>
-      </div>
 
-      <div className="border-t border-line">
-        <p className="mx-auto max-w-6xl px-4 py-4 text-center text-sm text-mute sm:px-6 md:text-left">
-          © 2026 CampusFind. All rights reserved.
-        </p>
+            <ul className="mt-3 space-y-1">
+              {accountLinks.map((link) => (
+                <li key={link.label}>
+                  <Link
+                    to={link.to}
+                    className="inline-flex min-h-[40px] items-center text-sm text-white/70 transition-colors duration-200 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        </div>
+
+        <div className="mt-12 border-t border-white/10 pt-6">
+          <p className="text-sm text-white/50">
+            &copy; {new Date().getFullYear()} CampusFind. All rights reserved.
+          </p>
+        </div>
       </div>
     </footer>
   );

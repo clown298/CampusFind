@@ -1,11 +1,14 @@
 import { useContext, useMemo, useState } from "react";
 import { FoundItemContext } from "../context/FoundItemContext";
-import PageShell from "../components/PageShell";
 import FilterBar from "../components/FilterBar";
 import ItemCard from "../components/ItemCard";
+import PageShell from "../components/PageShell";
 import { getItemTimestamp } from "../utils/items";
 import EmptyState from "../components/EmptyState";
 import Button from "../components/Button";
+import Reveal from "../components/Reveal";
+
+const eyebrow = "GCOEC • Campus Lost & Found";
 
 function FoundItemsPage() {
   const { foundItems, deleteFoundItem, updateFoundItem, isLoading, loadError } =
@@ -57,18 +60,18 @@ function FoundItemsPage() {
     search.trim() !== "" || category !== "All";
   const showing = filteredItems.length;
   const total = foundItems.length;
-  const countLabel = showing === 1 ? "item" : "items";
-  const headerCount = hasFilters
-    ? `${showing} of ${total} ${total === 1 ? "item" : "items"}`
-    : `${total} ${total === 1 ? "item" : "items"}`;
+  const statusText = hasFilters
+    ? `Showing ${showing} of ${total} found ${total === 1 ? "item" : "items"}`
+    : `${total} found ${total === 1 ? "item" : "items"}`;
 
   return (
     <PageShell
       title="Found Items"
-      description="Check belongings that have been found on campus. Search by item name, category, or location to see if yours is listed."
-      meta={headerCount}
+      eyebrow={eyebrow}
+      description="Items reported as found across campus. Search by item name, category, or location to see if yours is listed."
+      tone="found"
       action={
-        <Button to="/report-found" variant="save" className="w-full sm:w-auto">
+        <Button to="/report-found" variant="found" className="w-full sm:w-auto">
           Report Found Item
         </Button>
       }
@@ -86,7 +89,7 @@ function FoundItemsPage() {
 
       {loadError && (
         <div
-          className="mb-4 rounded-[6px] border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
+          className="mb-4 rounded-card border border-found/30 bg-found/10 p-4 text-sm text-found"
           role="alert"
         >
           <p className="font-semibold">Found items unavailable</p>
@@ -96,7 +99,7 @@ function FoundItemsPage() {
 
       {isLoading ? (
         <div
-          className="rounded-[8px] border border-line bg-surface px-5 py-10 text-center sm:px-8"
+          className="rounded-card border border-line bg-surface px-5 py-10 text-center sm:px-8"
           role="status"
         >
           <p className="text-sm font-semibold text-mute">
@@ -110,7 +113,7 @@ function FoundItemsPage() {
             description="When someone turns in a found belonging, it will appear here so the owner can recognize it."
             actionLabel="Report Found Item"
             actionTo="/report-found"
-            variant="save"
+            variant="found"
           />
         ) : (
           <EmptyState
@@ -118,28 +121,30 @@ function FoundItemsPage() {
             description="Try changing your search or category, or report a found item."
             actionLabel="Report Found Item"
             actionTo="/report-found"
-            variant="save"
+            variant="found"
           />
         )
       ) : (
-        <>
-          <p className="mb-4 text-sm text-mute" role="status">
-            {hasFilters
-              ? `Showing ${showing} of ${total} ${countLabel}`
-              : `Showing ${showing} ${countLabel}`}
-          </p>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5 lg:gap-6">
-            {filteredItems.map((item) => (
-              <ItemCard
-                key={item.id}
-                type="found"
-                item={item}
-                onUpdate={updateFoundItem}
-                onDelete={deleteFoundItem}
-              />
-            ))}
+        <Reveal className="min-w-0">
+          <div>
+            <h2 className="sr-only">Found item listings</h2>
+            <p className="mb-4 text-sm font-medium text-mute" role="status">
+              {statusText}
+            </p>
+            <ul className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredItems.map((item) => (
+                <li key={item.id} className="h-full min-w-0">
+                  <ItemCard
+                    type="found"
+                    item={item}
+                    onUpdate={updateFoundItem}
+                    onDelete={deleteFoundItem}
+                  />
+                </li>
+              ))}
+            </ul>
           </div>
-        </>
+        </Reveal>
       )}
     </PageShell>
   );

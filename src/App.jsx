@@ -22,7 +22,7 @@ function App() {
     <div className="flex min-h-screen flex-col bg-paper text-ink font-sans">
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-[6px] focus:bg-surface focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-md focus:bg-surface focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
       >
         Skip to main content
       </a>
@@ -31,7 +31,7 @@ function App() {
 
       <Navbar />
 
-      <main id="main-content" className="flex-1">
+      <main id="main-content" className="flex w-full flex-1 flex-col">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/lost-items" element={<LostItemsPage />} />

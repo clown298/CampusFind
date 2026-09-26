@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 
 import App from "./App";
 import "./index.css";
+import "@fontsource-variable/geist";
 
 import LostItemProvider from "./context/LostItemContext";
 import FoundItemProvider from "./context/FoundItemContext";

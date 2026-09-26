@@ -1,474 +1,460 @@
-import { useContext, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { LostItemContext } from "../context/LostItemContext";
-import { FoundItemContext } from "../context/FoundItemContext";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import Button from "../components/Button";
-import ItemCard from "../components/ItemCard";
-import EmptyState from "../components/EmptyState";
-import { getItemTimestamp } from "../utils/items";
+import {
+  SearchIcon,
+  ArrowRightIcon,
+  LostIcon,
+  FoundIcon,
+  ReportIcon,
+  MatchIcon,
+  VerifyIcon,
+  RecoverIcon,
+  CampusIcon,
+  ShieldIcon,
+} from "../components/icons";
 
-const CATEGORIES = [
-  "Electronics",
-  "Accessories",
-  "Books",
-  "Documents",
-  "Keys",
-  "Other",
+const SCOPES = [
+  { value: "all", label: "All" },
+  { value: "lost", label: "Lost" },
+  { value: "found", label: "Found" },
 ];
 
-function SearchIcon({ className = "" }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
-      <circle cx="11" cy="11" r="8" />
-      <path d="m21 21-4.3-4.3" />
-    </svg>
-  );
-}
+const SCOPE_ACTIVE = {
+  all: "bg-surface text-ink shadow-sm",
+  lost: "bg-lost/10 text-lost",
+  found: "bg-found/10 text-found",
+};
 
-function ArrowRightIcon({ className = "" }) {
+const RECOVERY_STEPS = [
+  {
+    icon: ReportIcon,
+    title: "Report",
+    description:
+      "Add what was lost or found so people on campus can see it.",
+  },
+  {
+    icon: MatchIcon,
+    title: "Match",
+    description:
+      "Possible matches connect found items with reports of what students have lost.",
+  },
+  {
+    icon: VerifyIcon,
+    title: "Verify",
+    description:
+      "A recovery request helps confirm ownership before the item changes hands.",
+  },
+  {
+    icon: RecoverIcon,
+    title: "Recover",
+    description:
+      "The item is returned and the listing is marked as recovered.",
+  },
+];
+
+const WHY_ITEMS = [
+  {
+    icon: CampusIcon,
+    title: "Campus-focused",
+    description:
+      "Listings are focused on the GCOEC campus community.",
+  },
+  {
+    icon: ReportIcon,
+    title: "Organized reports",
+    description:
+      "Each report includes useful details such as category, location, and date.",
+  },
+  {
+    icon: ShieldIcon,
+    title: "Secure recovery",
+    description:
+      "Recovery requests help confirm ownership before an item changes hands.",
+  },
+  {
+    icon: MatchIcon,
+    title: "Possible matches",
+    description:
+      "Lost and found reports can be compared to help connect items with their owners.",
+  },
+];
+
+const containerClass =
+  "mx-auto w-full min-w-0 max-w-[1440px] px-4 sm:px-8";
+
+function HeroSearch({
+  query,
+  setQuery,
+  scope,
+  setScope,
+  handleSearch,
+  handleSearchKeyDown,
+}) {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
-      <path d="M5 12h14" />
-      <path d="m12 5 7 7-7 7" />
-    </svg>
+    <div className="w-full max-w-xl rounded-card bg-surface p-2.5 lg:max-w-none">
+      <div
+        role="group"
+        aria-label="Choose search scope"
+        className="flex items-center gap-1 rounded-control bg-paper p-1"
+      >
+        {SCOPES.map((s) => (
+          <button
+            key={s.value}
+            type="button"
+            aria-pressed={scope === s.value}
+            onClick={() => setScope(s.value)}
+            className={[
+              "min-h-[44px] flex-1 cursor-pointer rounded-control px-3 text-sm font-semibold transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus",
+              scope === s.value
+                ? SCOPE_ACTIVE[s.value]
+                : "text-mute hover:text-ink",
+            ].join(" ")}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-2.5 flex min-h-[52px] items-center gap-2 rounded-control border border-line bg-surface px-3.5 transition-colors duration-150 focus-within:border-focus focus-within:ring-2 focus-within:ring-focus/30">
+        <SearchIcon className="h-5 w-5 shrink-0 text-mute" />
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={handleSearchKeyDown}
+          placeholder="Search by item, category, or location"
+          aria-label="Search lost and found items"
+          className="h-12 w-full min-w-0 flex-1 border-0 bg-transparent text-[15px] text-ink placeholder:text-mute/70 focus:outline-none focus:ring-0"
+        />
+        <button
+          type="button"
+          onClick={handleSearch}
+          className="inline-flex min-h-[44px] shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-control bg-ink px-4 text-sm font-semibold text-white transition-colors duration-200 hover:bg-ink-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+        >
+          Search
+        </button>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-5 gap-y-1 px-1 pb-1">
+        <Link
+          to="/lost-items"
+          className="inline-flex min-h-[36px] items-center gap-1.5 text-sm font-semibold text-ink/70 transition-colors duration-200 hover:text-lost focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+        >
+          <LostIcon size={16} className="text-lost" />
+          I lost something
+        </Link>
+        <Link
+          to="/found-items"
+          className="inline-flex min-h-[36px] items-center gap-1.5 text-sm font-semibold text-ink/70 transition-colors duration-200 hover:text-found focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+        >
+          <FoundIcon size={16} className="text-found" />
+          I found something
+        </Link>
+      </div>
+    </div>
   );
 }
 
 function Home() {
-  const {
-    lostItems,
-    deleteLostItem,
-    updateLostItem,
-    isLoading: lostLoading,
-    loadError: lostLoadError,
-  } = useContext(LostItemContext);
-  const {
-    foundItems,
-    deleteFoundItem,
-    updateFoundItem,
-    isLoading: foundLoading,
-    loadError: foundLoadError,
-  } = useContext(FoundItemContext);
   const navigate = useNavigate();
+  const [query, setQuery] = useState("");
+  const [scope, setScope] = useState("all");
 
-  const [heroSearch, setHeroSearch] = useState("");
-
-  const recentLost = useMemo(() => {
-    const sorted = [...lostItems].sort((a, b) => {
-      return getItemTimestamp(b, "lost") - getItemTimestamp(a, "lost");
-    });
-    return sorted.slice(0, 3);
-  }, [lostItems]);
-
-  const recentFound = useMemo(() => {
-    const sorted = [...foundItems].sort((a, b) => {
-      return getItemTimestamp(b, "found") - getItemTimestamp(a, "found");
-    });
-    return sorted.slice(0, 3);
-  }, [foundItems]);
-
-  function goToLostSearch() {
-    if (heroSearch.trim()) {
-      sessionStorage.setItem("campusfind:lost:search", heroSearch.trim());
+  function handleSearch() {
+    const targetScope = scope === "found" ? "found" : "lost";
+    const key = `campusfind:${targetScope}:search`;
+    if (query.trim()) {
+      sessionStorage.setItem(key, query.trim());
     }
-    navigate("/lost-items");
+    navigate(`/${targetScope}-items`);
   }
 
-  function goToFoundSearch() {
-    if (heroSearch.trim()) {
-      sessionStorage.setItem("campusfind:found:search", heroSearch.trim());
-    }
-    navigate("/found-items");
-  }
-
-  function handleHeroKeyDown(e) {
+  function handleSearchKeyDown(e) {
     if (e.key === "Enter") {
-      goToLostSearch();
+      handleSearch();
     }
-  }
-
-  function goToLostCategory(cat) {
-    sessionStorage.setItem("campusfind:lost:category", cat);
-    navigate("/lost-items");
-  }
-
-  function goToFoundCategory(cat) {
-    sessionStorage.setItem("campusfind:found:category", cat);
-    navigate("/found-items");
   }
 
   return (
-    <div className="mx-auto w-full min-w-0 max-w-6xl overflow-x-clip px-4 py-10 sm:px-6">
-      {(lostLoadError || foundLoadError) && (
-        <div
-          className="mb-6 rounded-[6px] border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
-          role="alert"
-        >
-          <p className="font-semibold">Some listings could not be loaded</p>
-          <p className="mt-1">
-            {lostLoadError ? `${lostLoadError} ` : ""}
-            {foundLoadError ? ` ${foundLoadError}` : ""}
-          </p>
-        </div>
-      )}
-
-      {/* 1. Hero + Search */}
-      <section className="border-b border-line pb-10 sm:pb-14">
-        <div className="mx-auto max-w-3xl text-center">
-          <p className="mb-4 inline-flex items-center rounded-[999px] border border-line bg-surface px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-mute">
-            GCOEC Chandrapur
-          </p>
-          <h1 className="font-serif text-4xl font-semibold leading-tight text-ink sm:text-5xl md:text-6xl">
-            <span className="block">Find what you lost.</span>
-            <span className="mt-1 block text-mute">Return what you found.</span>
-          </h1>
-          <p className="mx-auto mt-5 max-w-xl text-base leading-7 text-mute sm:text-lg">
-            A simple campus lost-and-found service for GCOEC Chandrapur
-            students.
-          </p>
-
-          <div className="mt-8">
-            <div className="flex min-h-[52px] flex-col items-stretch gap-2 rounded-[8px] border border-line bg-surface p-2 sm:flex-row sm:items-center sm:gap-2">
-              <div className="flex flex-1 items-center min-w-0 px-2">
-                <SearchIcon className="mr-2 h-5 w-5 shrink-0 text-mute" />
-                <input
-                  type="search"
-                  value={heroSearch}
-                  onChange={(e) => setHeroSearch(e.target.value)}
-                  onKeyDown={handleHeroKeyDown}
-                  placeholder="Search for an item, category, or location..."
-                  aria-label="Search lost and found items"
-                  className="h-11 w-full min-w-0 border-0 bg-transparent px-1 py-2 text-sm text-ink placeholder:text-mute/70 focus:outline-none focus:ring-0"
+    <div className="w-full min-w-0 overflow-x-clip">
+      {/* 1. Main entry — refined dark band, statement left, actions deck right */}
+      <section className="bg-ink" aria-labelledby="main-entry">
+        <div className={containerClass}>
+          <div className="grid grid-cols-1 items-center gap-10 py-12 lg:grid-cols-12 lg:gap-14 lg:py-16">
+            <div className="min-w-0 lg:col-span-7">
+              <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white/80">
+                <span
+                  className="h-2 w-2 rounded-full bg-canopy"
+                  aria-hidden="true"
                 />
-              </div>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={goToLostSearch}
-                  className="flex-1 sm:flex-none"
-                >
-                  Search Lost Items
-                </Button>
-                <Button
-                  type="button"
-                  variant="save"
-                  onClick={goToFoundSearch}
-                  className="flex-1 sm:flex-none"
-                >
-                  Search Found Items
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 2. Report Quick Actions */}
-      <section className="py-10 sm:py-14">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5">
-          <div className="rounded-[8px] border border-line bg-surface p-6 sm:p-7">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brick">
-              Report Lost
-            </p>
-            <h2 className="mt-3 font-serif text-2xl font-semibold text-ink">
-              Report a Lost Item
-            </h2>
-            <p className="mt-2 text-base leading-6 text-mute">
-              Lost something on campus? Report it so others can help.
-            </p>
-            <div className="mt-6">
-              <Button
-                to="/report-lost"
-                variant="primary"
-                className="w-full sm:w-auto"
-              >
-                Report Lost Item
-              </Button>
-            </div>
-          </div>
-
-          <div className="rounded-[8px] border border-line bg-surface p-6 sm:p-7">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-canopy">
-              Report Found
-            </p>
-            <h2 className="mt-3 font-serif text-2xl font-semibold text-ink">
-              Report a Found Item
-            </h2>
-            <p className="mt-2 text-base leading-6 text-mute">
-              Found something on campus? Help return it to its owner.
-            </p>
-            <div className="mt-6">
-              <Button
-                to="/report-found"
-                variant="save"
-                className="w-full sm:w-auto"
-              >
-                Report Found Item
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 3. Browse by Category */}
-      <section className="border-t border-line pt-10 sm:pt-14">
-        <div className="mb-6">
-          <h2 className="font-serif text-3xl font-semibold text-ink">
-            Browse by category
-          </h2>
-          <p className="mt-2 max-w-2xl text-base leading-6 text-mute">
-            Narrow the listings using the same categories used across lost and
-            found reports.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          {CATEGORIES.map((cat) => (
-            <div
-              key={cat}
-              className="rounded-[8px] border border-line bg-surface p-4"
-            >
-              <p className="font-serif text-lg font-semibold text-ink">
-                {cat}
+                GCOEC &bull; Campus Lost &amp; Found
               </p>
-              <div className="mt-4 flex flex-col gap-2">
-                <button
-                  type="button"
-                  onClick={() => goToLostCategory(cat)}
-                  className="inline-flex min-h-[40px] items-center justify-between rounded-[6px] border border-line px-3 py-1.5 text-xs font-semibold text-brick transition-colors duration-200 hover:border-brick/50 hover:bg-brick/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
-                >
-                  <span>Lost</span>
-                  <ArrowRightIcon className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => goToFoundCategory(cat)}
-                  className="inline-flex min-h-[40px] items-center justify-between rounded-[6px] border border-line px-3 py-1.5 text-xs font-semibold text-canopy transition-colors duration-200 hover:border-canopy/50 hover:bg-canopy/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
-                >
-                  <span>Found</span>
-                  <ArrowRightIcon className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
 
-      {/* 4. Recently Lost / Recently Found */}
-      <section className="border-t border-line py-10 sm:py-14">
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-8">
-          <div>
-            <div className="mb-5 flex items-end justify-between gap-4">
-              <div>
-                <h2 className="font-serif text-2xl font-semibold text-ink">
-                  Recently Lost
-                </h2>
-                <p className="mt-1 text-sm text-mute">
-                  {lostItems.length === 0
-                    ? "No items reported yet."
-                    : lostItems.length === 1
-                    ? "1 item reported."
-                    : `${lostItems.length} items reported.`}
-                </p>
-              </div>
-              <Button
-                to="/lost-items"
-                variant="secondary"
-                className="shrink-0"
-              >
-                <span className="flex items-center gap-1.5">
-                  View all
-                  <ArrowRightIcon className="h-4 w-4" />
-                </span>
-              </Button>
+              <h1 className="type-display mt-5 text-4xl text-white sm:text-5xl lg:text-[3.5rem]">
+                Report it, match it, get it back.
+              </h1>
+
+              <p className="mt-5 max-w-xl text-base leading-7 text-white/75">
+                CampusFind is the campus registry for lost and found items at
+                GCOEC. Report what you lost or found, check the listings, and
+                follow the recovery process in one place.
+              </p>
             </div>
 
-            {lostLoading ? (
-              <div
-                className="rounded-[8px] border border-line bg-surface px-5 py-10 text-center"
-                role="status"
-              >
-                <p className="text-sm font-semibold text-mute">
-                  Loading recent lost items…
-                </p>
-              </div>
-            ) : recentLost.length === 0 ? (
-              <EmptyState
-                title="No lost items yet"
-                description="Items reported missing will appear here for other students to check."
-                actionLabel="Report Lost Item"
-                actionTo="/report-lost"
-                variant="primary"
+            <div className="min-w-0 lg:col-span-5">
+              <HeroSearch
+                query={query}
+                setQuery={setQuery}
+                scope={scope}
+                setScope={setScope}
+                handleSearch={handleSearch}
+                handleSearchKeyDown={handleSearchKeyDown}
               />
-            ) : (
-              <div className="grid grid-cols-1 gap-4">
-                {recentLost.map((item) => (
-                  <ItemCard
-                    key={item.id}
-                    type="lost"
-                    item={item}
-                    onUpdate={updateLostItem}
-                    onDelete={deleteLostItem}
-                  />
-                ))}
-              </div>
-            )}
+            </div>
           </div>
+        </div>
+      </section>
 
-          <div>
-            <div className="mb-5 flex items-end justify-between gap-4">
-              <div>
-                <h2 className="font-serif text-2xl font-semibold text-ink">
-                  Recently Found
-                </h2>
-                <p className="mt-1 text-sm text-mute">
-                  {foundItems.length === 0
-                    ? "No items turned in yet."
-                    : foundItems.length === 1
-                    ? "1 item turned in."
-                    : `${foundItems.length} items turned in.`}
-                </p>
-              </div>
-              <Button
-                to="/found-items"
-                variant="secondary"
-                className="shrink-0"
+      {/* 2. Make a report — heading column + one shared twin-panel surface */}
+      <section className="bg-paper" aria-labelledby="make-a-report">
+        <div className={containerClass}>
+          <div className="grid grid-cols-1 gap-8 py-12 lg:grid-cols-12 lg:gap-14 lg:py-16">
+            <div className="lg:col-span-4">
+              <p className="type-eyebrow text-mute">Make a report</p>
+              <h2
+                id="make-a-report"
+                className="type-section mt-2.5 text-2xl text-ink sm:text-3xl"
               >
-                <span className="flex items-center gap-1.5">
-                  View all
-                  <ArrowRightIcon className="h-4 w-4" />
-                </span>
-              </Button>
+                Two reports, one registry
+              </h2>
+              <p className="mt-3 max-w-md text-[15px] leading-6 text-mute">
+                Lost something? Found something? The details you add are what
+                help someone identify it, or help it get back to its owner.
+              </p>
             </div>
 
-            {foundLoading ? (
-              <div
-                className="rounded-[8px] border border-line bg-surface px-5 py-10 text-center"
-                role="status"
+            <div className="lg:col-span-8">
+              <div className="overflow-hidden rounded-card border border-line bg-surface sm:grid sm:grid-cols-2">
+                <div className="flex flex-col p-6 sm:p-7">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-lost text-white">
+                      <LostIcon size={20} />
+                    </span>
+                    <h3 className="type-card text-lg text-ink">
+                      You lost something
+                    </h3>
+                  </div>
+                  <p className="mt-3 flex-1 text-[15px] leading-6 text-mute">
+                    Report what you lost with the details that can help someone
+                    identify it.
+                  </p>
+                  <div className="mt-6">
+                    <Button
+                      to="/report-lost"
+                      variant="secondary"
+                      className="w-full gap-2"
+                    >
+                      Report Lost Item
+                      <ArrowRightIcon size={16} className="text-lost" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex flex-col border-t border-line p-6 sm:border-l sm:border-t-0 sm:p-7">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-found text-white">
+                      <FoundIcon size={20} />
+                    </span>
+                    <h3 className="type-card text-lg text-ink">
+                      You found something
+                    </h3>
+                  </div>
+                  <p className="mt-3 flex-1 text-[15px] leading-6 text-mute">
+                    Report what you found so its owner has a chance to get it
+                    back.
+                  </p>
+                  <div className="mt-6">
+                    <Button
+                      to="/report-found"
+                      variant="secondary"
+                      className="w-full gap-2"
+                    >
+                      Report Found Item
+                      <ArrowRightIcon size={16} className="text-found" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 3. Registry access — one shared surface, two entry rows */}
+      <section className="py-12 lg:py-16" aria-labelledby="browse-listings">
+        <div className={containerClass}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-8">
+            <div>
+              <p className="type-eyebrow text-mute">Registry access</p>
+              <h2
+                id="browse-listings"
+                className="type-section mt-2.5 text-2xl text-ink sm:text-3xl"
               >
-                <p className="text-sm font-semibold text-mute">
-                  Loading recent found items…
-                </p>
-              </div>
-            ) : recentFound.length === 0 ? (
-              <EmptyState
-                title="No found items yet"
-                description="Items turned in will appear here so owners can identify them."
-                actionLabel="Report Found Item"
-                actionTo="/report-found"
-                variant="save"
-              />
-            ) : (
-              <div className="grid grid-cols-1 gap-4">
-                {recentFound.map((item) => (
-                  <ItemCard
-                    key={item.id}
-                    type="found"
-                    item={item}
-                    onUpdate={updateFoundItem}
-                    onDelete={deleteFoundItem}
-                  />
-                ))}
-              </div>
-            )}
+                Browse the listings
+              </h2>
+            </div>
+            <p className="max-w-lg text-[15px] leading-6 text-mute">
+              Check lost and found reports, view item details, and request
+              recovery when you find a possible match.
+            </p>
+          </div>
+
+          <div className="mt-7 overflow-hidden rounded-card border border-line bg-surface sm:grid sm:grid-cols-2">
+            <Link
+              to="/lost-items"
+              className="group flex items-center justify-between gap-4 p-5 transition-colors duration-200 hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus sm:p-6"
+            >
+              <span className="flex min-w-0 items-center gap-4">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-lost/10 text-lost">
+                  <LostIcon size={24} />
+                </span>
+                <span className="min-w-0">
+                  <span className="type-card block text-lg text-ink">
+                    Lost Items
+                  </span>
+                  <span className="mt-1 block text-sm text-mute">
+                    Items reported missing across campus
+                  </span>
+                </span>
+              </span>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control border border-line text-mute transition-colors duration-200 group-hover:border-lost group-hover:bg-lost group-hover:text-white">
+                <ArrowRightIcon size={18} />
+              </span>
+            </Link>
+
+            <Link
+              to="/found-items"
+              className="group flex items-center justify-between gap-4 border-t border-line p-5 transition-colors duration-200 hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus sm:border-l sm:border-t-0 sm:p-6"
+            >
+              <span className="flex min-w-0 items-center gap-4">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-found/10 text-found">
+                  <FoundIcon size={24} />
+                </span>
+                <span className="min-w-0">
+                  <span className="type-card block text-lg text-ink">
+                    Found Items
+                  </span>
+                  <span className="mt-1 block text-sm text-mute">
+                    Items reported as found across campus
+                  </span>
+                </span>
+              </span>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control border border-line text-mute transition-colors duration-200 group-hover:border-found group-hover:bg-found group-hover:text-white">
+                <ArrowRightIcon size={18} />
+              </span>
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* 5. How It Works */}
-      <section className="border-t border-line pt-10 sm:pt-14">
-        <div className="mx-auto max-w-3xl">
-          <div className="text-center">
-            <h2 className="font-serif text-3xl font-semibold text-ink">
-              How it works
-            </h2>
-            <p className="mt-2 text-base leading-6 text-mute">
-              Three simple steps between losing something and getting it back.
-            </p>
-          </div>
+      {/* 4. Recovery process — one connected workflow panel */}
+      <section className="bg-paper" aria-labelledby="recovery-process">
+        <div className={containerClass}>
+          <div className="py-12 lg:py-16">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-8">
+              <div>
+                <p className="type-eyebrow text-canopy">Recovery</p>
+                <h2
+                  id="recovery-process"
+                  className="type-section mt-2.5 text-2xl text-ink sm:text-3xl"
+                >
+                  How an item gets back to you
+                </h2>
+              </div>
+              <p className="flex max-w-md items-start gap-2 text-sm leading-6 text-mute">
+                <ShieldIcon
+                  size={16}
+                  className="mt-1 shrink-0 text-pending"
+                  aria-hidden="true"
+                />
+                Ownership is confirmed before an item changes hands.
+              </p>
+            </div>
 
-          <ol className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-3 sm:gap-4">
-            <li className="rounded-[8px] border border-line bg-surface p-6">
-              <p className="font-serif text-3xl font-semibold text-brick">01</p>
-              <h3 className="mt-2 text-lg font-semibold uppercase tracking-[0.06em] text-ink">
-                Search
-              </h3>
-              <p className="mt-2 text-sm leading-6 text-mute">
-                Look through reported lost and found items by name, category,
-                or location.
-              </p>
-            </li>
-            <li className="rounded-[8px] border border-line bg-surface p-6">
-              <p className="font-serif text-3xl font-semibold text-brick">02</p>
-              <h3 className="mt-2 text-lg font-semibold uppercase tracking-[0.06em] text-ink">
-                Report
-              </h3>
-              <p className="mt-2 text-sm leading-6 text-mute">
-                Post an item you lost or found on campus so the campus
-                community can see it.
-              </p>
-            </li>
-            <li className="rounded-[8px] border border-line bg-surface p-6">
-              <p className="font-serif text-3xl font-semibold text-brick">03</p>
-              <h3 className="mt-2 text-lg font-semibold uppercase tracking-[0.06em] text-ink">
-                Connect
-              </h3>
-              <p className="mt-2 text-sm leading-6 text-mute">
-                Use contact details from each report to arrange a safe return
-                on campus.
-              </p>
-            </li>
-          </ol>
+            <ol className="mt-7 grid grid-cols-1 gap-px overflow-hidden rounded-card border border-line bg-line md:grid-cols-2 lg:grid-cols-4">
+              {RECOVERY_STEPS.map((step, index) => {
+                const StepIcon = step.icon;
+                return (
+                  <li
+                    key={step.title}
+                    className="flex min-w-0 flex-col bg-surface p-5 md:p-6"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-canopy/10 text-canopy">
+                        <StepIcon size={18} />
+                      </span>
+                      <span className="type-eyebrow text-mute/70">
+                        Step {index + 1}
+                      </span>
+                    </div>
+                    <h3 className="type-card mt-4 text-base text-ink">
+                      {step.title}
+                    </h3>
+                    <p className="mt-1.5 text-sm leading-6 text-mute">
+                      {step.description}
+                    </p>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
         </div>
       </section>
 
-      {/* 6. Final CTA */}
-      <section className="border-t border-line py-10 sm:py-14">
-        <div className="mx-auto max-w-3xl rounded-[8px] border border-line bg-surface px-6 py-8 sm:px-10 sm:py-10">
-          <div className="text-center">
-            <h2 className="font-serif text-3xl font-semibold text-ink">
-              Have something to report?
-            </h2>
-            <p className="mx-auto mt-2 max-w-xl text-base leading-6 text-mute">
-              Your report could help a classmate get their belongings back.
-            </p>
-          </div>
-          <div className="mt-6 flex flex-col-reverse items-stretch justify-center gap-3 sm:flex-row sm:items-center">
-            <Button
-              to="/report-lost"
-              variant="primary"
-              className="w-full sm:w-auto"
-            >
-              Report Lost Item
-            </Button>
-            <Button
-              to="/report-found"
-              variant="save"
-              className="w-full sm:w-auto"
-            >
-              Report Found Item
-            </Button>
+      {/* 5. Built for GCOEC — system summary */}
+      <section className="py-12 lg:py-16" aria-labelledby="why-campusfind">
+        <div className={containerClass}>
+          <div className="grid grid-cols-1 gap-10 lg:grid-cols-12 lg:gap-14">
+            <div className="lg:col-span-5">
+              <p className="type-eyebrow text-mute">About CampusFind</p>
+              <h2
+                id="why-campusfind"
+                className="type-section mt-2.5 text-2xl text-ink sm:text-3xl"
+              >
+                Built for GCOEC
+              </h2>
+              <p className="mt-3 max-w-md text-[15px] leading-6 text-mute">
+                A simple campus system for reporting, matching, and recovering
+                lost belongings.
+              </p>
+            </div>
+
+            <div className="lg:col-span-7">
+              <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2">
+                {WHY_ITEMS.map((feature) => {
+                  const FeatureIcon = feature.icon;
+                  return (
+                    <div
+                      key={feature.title}
+                      className="flex flex-col gap-3 sm:flex-row sm:items-start"
+                    >
+                      <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-paper text-ink">
+                        <FeatureIcon size={20} />
+                      </span>
+                      <div>
+                        <h3 className="type-card text-base text-ink">
+                          {feature.title}
+                        </h3>
+                        <p className="mt-1.5 text-sm leading-6 text-mute">
+                          {feature.description}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       </section>

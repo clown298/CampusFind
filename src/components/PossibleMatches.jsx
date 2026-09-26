@@ -1,16 +1,17 @@
 import { useContext, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import Button from "./Button";
+import { MatchIcon } from "./icons";
 import { findPossibleMatches } from "../utils/matching";
 import { formatDisplayDate, getItemDate, getItemName } from "../utils/items";
 import { RecoveryRequestContext } from "../context/RecoveryRequestContext";
 import { AuthContext } from "../context/AuthContext";
 
 const RECOVERY_STATUS_META = {
-  pending: { label: "Pending", classes: "border-line text-ink" },
+  pending: { label: "Pending", classes: "border-pending text-pending" },
   approved: { label: "Approved", classes: "border-canopy text-canopy" },
   rejected: { label: "Rejected", classes: "border-lost text-lost" },
-  recovered: { label: "Recovered", classes: "border-canopy text-canopy" },
+  recovered: { label: "Recovered", classes: "border-recovered text-recovered" },
 };
 
 const RECOVERY_STATUS_NOTES = {
@@ -75,16 +76,24 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
     const note =
       RECOVERY_STATUS_NOTES[existingRequest.status] ||
       RECOVERY_STATUS_NOTES.pending;
+    const tintMap = {
+      pending: "border-pending/25 bg-pending/5",
+      approved: "border-canopy/25 bg-canopy/5",
+      rejected: "border-lost/25 bg-lost/5",
+      recovered: "border-recovered/25 bg-recovered/5",
+    };
     return (
-      <div className="mt-3 rounded-[6px] border border-line bg-paper p-4">
-        <p className="flex flex-wrap items-center gap-2 text-sm text-mute">
-          <span
-            className={`inline-flex items-center rounded-[4px] border px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.08em] ${meta.classes}`}
-          >
-            {meta.label}
-          </span>
-          <span>{note}</span>
-        </p>
+      <div
+        className={`mt-3 flex flex-wrap items-center gap-2 rounded-control border p-4 ${
+          tintMap[existingRequest.status] || "border-line bg-surface"
+        }`}
+      >
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full border bg-surface px-2 py-0.5 text-xs font-semibold ${meta.classes}`}
+        >
+          {meta.label}
+        </span>
+        <span className="min-w-0 text-sm text-mute">{note}</span>
       </div>
     );
   }
@@ -172,7 +181,7 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
     <div className="mt-4">
       {submitError && (
         <div
-          className="mb-3 rounded-[6px] border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
+          className="mb-3 rounded-card border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
           role="alert"
         >
           <p className="font-semibold">Something went wrong</p>
@@ -182,7 +191,7 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
 
       {!open ? (
         <Button
-          variant="secondary"
+          variant="found"
           onClick={requestRecovery}
           className="w-full sm:w-auto"
         >
@@ -192,7 +201,7 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
         <form
           onSubmit={handleSubmit}
           noValidate
-          className="rounded-[6px] border border-line bg-paper p-4"
+          className="animate-menu-in rounded-control border border-line bg-surface p-4"
         >
           <p className="text-sm font-semibold text-ink">
             Request recovery of this item
@@ -226,7 +235,7 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
                     ? `recovery-name-error-${lostItemId}-${foundItemId}`
                     : undefined
                 }
-                className={`w-full min-h-[44px] rounded-[6px] border px-3.5 py-2.5 text-sm text-ink placeholder:text-mute/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper transition-colors duration-150 ${
+                className={`w-full min-h-[44px] rounded-control border px-3.5 py-2.5 text-sm text-ink placeholder:text-mute/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-colors duration-150 ${
                   errors.claimantName
                     ? "border-lost bg-lost/5 focus-visible:ring-lost"
                     : "border-line bg-surface hover:border-mute/40"
@@ -267,7 +276,7 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
                     ? `recovery-email-error-${lostItemId}-${foundItemId}`
                     : undefined
                 }
-                className={`w-full min-h-[44px] rounded-[6px] border px-3.5 py-2.5 text-sm text-ink placeholder:text-mute/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper transition-colors duration-150 ${
+                className={`w-full min-h-[44px] rounded-control border px-3.5 py-2.5 text-sm text-ink placeholder:text-mute/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-colors duration-150 ${
                   errors.claimantEmail
                     ? "border-lost bg-lost/5 focus-visible:ring-lost"
                     : "border-line bg-surface hover:border-mute/40"
@@ -308,7 +317,7 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
                     ? `recovery-phone-error-${lostItemId}-${foundItemId}`
                     : undefined
                 }
-                className={`w-full min-h-[44px] rounded-[6px] border px-3.5 py-2.5 text-sm text-ink placeholder:text-mute/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper transition-colors duration-150 ${
+                className={`w-full min-h-[44px] rounded-control border px-3.5 py-2.5 text-sm text-ink placeholder:text-mute/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-colors duration-150 ${
                   errors.claimantPhone
                     ? "border-lost bg-lost/5 focus-visible:ring-lost"
                     : "border-line bg-surface hover:border-mute/40"
@@ -348,7 +357,7 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
                     ? `recovery-message-error-${lostItemId}-${foundItemId}`
                     : undefined
                 }
-                className={`w-full rounded-[6px] border px-3.5 py-2.5 text-sm leading-relaxed text-ink placeholder:text-mute/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper transition-colors duration-150 resize-y ${
+                className={`w-full rounded-control border px-3.5 py-2.5 text-sm leading-relaxed text-ink placeholder:text-mute/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-colors duration-150 resize-y ${
                   errors.claimantMessage
                     ? "border-lost bg-lost/5 focus-visible:ring-lost"
                     : "border-line bg-surface hover:border-mute/40"
@@ -369,7 +378,7 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
                 <label className="mb-1.5 block text-sm font-semibold text-ink">
                   Proof Images (Optional)
                 </label>
-                <span className="mb-1.5 inline-flex items-center rounded-[4px] border border-line bg-surface px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.08em] text-mute">
+                <span className="mb-1.5 inline-flex items-center rounded-full border border-line bg-surface px-2 py-0.5 text-xs font-semibold text-mute">
                   Optional
                 </span>
               </div>
@@ -383,17 +392,17 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
                   {proofImages.map((image, index) => (
                     <li
                       key={index}
-                      className="rounded-[6px] border border-line bg-surface p-2"
+                      className="rounded-card border border-line bg-surface p-2"
                     >
                       <img
                         src={image}
                         alt=""
-                        className="h-24 w-full rounded-[4px] object-cover bg-ink/5"
+                        className="h-24 w-full rounded-card object-contain bg-paper"
                       />
                       <button
                         type="button"
                         onClick={() => removeProofImage(index)}
-                        className="mt-2 inline-flex min-h-[36px] w-full items-center justify-center rounded-[4px] border border-line bg-surface px-2 text-xs font-semibold text-ink transition-colors duration-150 hover:border-lost hover:text-lost focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+                        className="mt-2 inline-flex min-h-[36px] w-full items-center justify-center rounded-control border border-line bg-surface px-2 text-xs font-semibold text-ink transition-colors duration-150 hover:border-lost hover:text-lost focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
                       >
                         Remove
                       </button>
@@ -406,7 +415,7 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
                 <div>
                   <label
                     htmlFor={`recovery-proof-${lostItemId}-${foundItemId}`}
-                    className={`inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-[6px] border border-dashed px-4 text-sm font-semibold transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper ${
+                    className={`inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-control border border-dashed px-4 text-sm font-semibold transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
                       proofError
                         ? "border-lost bg-lost/5 text-lost"
                         : "border-line bg-surface text-ink hover:border-mute/50"
@@ -465,7 +474,7 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
             </Button>
             <Button
               type="submit"
-              variant="save"
+              variant="found"
               disabled={submitting}
               className="w-full sm:w-auto"
             >
@@ -508,35 +517,41 @@ function PossibleMatches({
   }
 
   return (
-    <section className="mt-8 sm:mt-10">
-      <h2 className="font-serif text-2xl font-semibold text-ink">
-        Possible Matches
-      </h2>
-      <p className="mt-2 max-w-2xl text-sm leading-6 text-mute">
+    <section id="possible-matches" className="mt-10 scroll-mt-24">
+      <div className="flex items-center gap-3">
+        <span
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-canopy/10 text-canopy"
+          aria-hidden="true"
+        >
+          <MatchIcon size={20} />
+        </span>
+        <h2 className="type-section text-2xl text-ink">Possible Matches</h2>
+      </div>
+      <p className="mt-2.5 max-w-2xl text-[0.9375rem] leading-6 text-mute">
         The following {oppositeLabel} may describe the same physical item.
         These are suggestions based on name, category, location, date, and
-        description — not confirmations.
+        description, not confirmations.
       </p>
 
       {candidatesLoading ? (
-        <div
-          className="mt-4 rounded-[8px] border border-line bg-surface px-5 py-8 text-center"
-          role="status"
-        >
-          <p className="text-sm font-semibold text-mute">
-            Checking for possible matches…
-          </p>
-        </div>
+<div
+        className="mt-4 rounded-card border border-line bg-surface px-5 py-8 text-center"
+        role="status"
+      >
+        <p className="text-sm font-semibold text-mute">
+          Checking for possible matches…
+        </p>
+      </div>
       ) : candidatesLoadError ? (
         <div
-          className="mt-4 rounded-[6px] border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
+          className="mt-4 rounded-card border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
           role="alert"
         >
           <p className="font-semibold">Possible matches unavailable</p>
           <p className="mt-1">{candidatesLoadError}</p>
         </div>
       ) : matches.length === 0 ? (
-        <div className="mt-4 rounded-[8px] border border-line bg-surface px-5 py-8 text-center">
+        <div className="mt-4 rounded-card border border-line bg-surface px-5 py-8 text-center">
           <p className="text-sm text-mute">No possible matches found yet.</p>
         </div>
       ) : (
@@ -546,8 +561,6 @@ function PossibleMatches({
               oppositeType === "found"
                 ? `/found-items/${match.item.id}`
                 : `/lost-items/${match.item.id}`;
-            const accentClass =
-              oppositeType === "found" ? "text-canopy" : "text-brick";
             const dateText = formatDisplayDate(
               getItemDate(match.item, oppositeType)
             );
@@ -557,34 +570,21 @@ function PossibleMatches({
             return (
               <li
                 key={match.item.id}
-                className="rounded-[8px] border border-line bg-surface p-5"
+                className="rounded-card border border-line bg-surface p-4 transition-colors duration-200 hover:border-canopy/40"
               >
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <Link
                       to={detailPath}
-                      className={`inline-block break-words font-serif text-xl font-semibold no-underline transition-colors duration-200 hover:underline underline-offset-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface rounded-[4px] -m-1 p-1 ${accentClass}`}
+                      className="type-card -m-1 inline-block break-words rounded-control p-1 text-xl text-ink no-underline underline-offset-4 transition-colors duration-200 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
                       aria-label={`View ${oppositeType} item: ${getItemName(match.item)}`}
                     >
                       {getItemName(match.item)}
                     </Link>
 
-                    <dl className="mt-3 space-y-1 break-words text-sm text-ink">
-                      <div>
-                        <dt className="inline font-semibold">Category: </dt>
-                        <dd className="inline">{match.item.category}</dd>
-                      </div>
-                      <div>
-                        <dt className="inline font-semibold">Location: </dt>
-                        <dd className="inline">{match.item.location}</dd>
-                      </div>
-                      <div>
-                        <dt className="inline font-semibold">
-                          {oppositeType === "found" ? "Date found: " : "Date lost: "}
-                        </dt>
-                        <dd className="inline">{dateText}</dd>
-                      </div>
-                    </dl>
+                    <p className="mt-2 text-sm text-mute">
+                      {match.item.category} · {match.item.location} · {dateText}
+                    </p>
 
                     {match.reasons.length > 0 ? (
                       <p className="mt-3 text-sm font-medium leading-6 text-ink">
@@ -594,7 +594,7 @@ function PossibleMatches({
                   </div>
 
                   <div className="shrink-0 sm:pl-4">
-                    <p className="inline-flex items-center rounded-[4px] border border-line bg-paper px-2.5 py-1 text-sm font-semibold text-ink">
+                    <p className="inline-flex items-center rounded-full border border-line bg-surface px-2.5 py-1 text-sm font-semibold text-ink">
                       {match.score}% match
                     </p>
                   </div>

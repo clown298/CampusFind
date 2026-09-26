@@ -1,5 +1,5 @@
 import { useContext, useMemo, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { LostItemContext } from "../context/LostItemContext";
 import { FoundItemContext } from "../context/FoundItemContext";
 import { AuthContext } from "../context/AuthContext";
@@ -7,6 +7,10 @@ import PageShell from "../components/PageShell";
 import Button from "../components/Button";
 import EmptyState from "../components/EmptyState";
 import PossibleMatches from "../components/PossibleMatches";
+import TypeChip from "../components/TypeChip";
+import ItemImage from "../components/ItemImage";
+import Reveal from "../components/Reveal";
+import { LostIcon, FoundIcon, PinIcon, CalendarIcon } from "../components/icons";
 import { formatDisplayDate, getItemName, getItemDate } from "../utils/items";
 
 const CATEGORIES = [
@@ -96,7 +100,7 @@ function ArrowLeftIcon({ className = "" }) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
       className={className}
@@ -108,19 +112,23 @@ function ArrowLeftIcon({ className = "" }) {
   );
 }
 
+const fieldClass = (hasError) =>
+  [
+    "w-full min-h-[44px] rounded-control border px-3.5 py-2.5 text-sm text-ink placeholder:text-mute/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-colors duration-150",
+    hasError
+      ? "border-lost bg-lost/5 focus-visible:ring-lost"
+      : "border-line bg-surface hover:border-mute/40",
+  ].join(" ");
+
 function ItemDetails({ type }) {
   const isFound = type === "found";
   const statusLabel = isFound ? "Found" : "Lost";
-  const accentClass = isFound ? "text-canopy" : "text-brick";
-  const badgeClass = isFound
-    ? "border-canopy text-canopy"
-    : "border-brick text-brick";
   const dateKey = isFound ? "dateFound" : "dateLost";
   const dateLabel = isFound ? "Date Found" : "Date Lost";
   const locationLabel = isFound ? "Location Found" : "Location Lost";
   const listPath = isFound ? "/found-items" : "/lost-items";
   const reportPath = isFound ? "/report-found" : "/report-lost";
-  const reportVariant = isFound ? "save" : "primary";
+  const reportVariant = isFound ? "found" : "lost";
 
   const { id } = useParams();
   const navigate = useNavigate();
@@ -312,7 +320,7 @@ function ItemDetails({ type }) {
         description={`View the full details of a ${statusLabel.toLowerCase()} item reported on campus.`}
       >
         <div
-          className="mx-auto w-full max-w-3xl rounded-[8px] border border-line bg-surface px-5 py-10 text-center sm:px-8"
+          className="mx-auto w-full max-w-3xl rounded-card border border-line bg-surface px-5 py-10 text-center sm:px-8"
           role="status"
         >
           <p className="text-sm font-semibold text-mute">
@@ -346,529 +354,548 @@ function ItemDetails({ type }) {
     user && item.userId && String(item.userId) === String(user.id)
   );
 
-  const shellTitle = `${displayName || statusLabel + " Item"} — ${statusLabel}`;
-  const shellDescription = isFound
-    ? "Full details of an item found on campus. If this belongs to you, use the contact details to arrange its return."
-    : "Full details of an item reported missing on campus. If you have found this item, use the contact details to help return it.";
+  function scrollToMatches() {
+    const target = document.getElementById("possible-matches");
+    if (!target) return;
+    const reduceMotion = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
+    target.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });
+  }
 
   return (
-    <PageShell
-      title={shellTitle}
-      description={shellDescription}
-      action={
-        <Button
-          to={listPath}
-          variant="secondary"
-          className="w-full sm:w-auto"
+    <div className="mx-auto w-full min-w-0 max-w-[1440px] overflow-x-clip px-4 py-8 sm:px-8">
+      <Link
+        to={listPath}
+        className="inline-flex min-h-[44px] items-center gap-1.5 rounded-control text-sm font-semibold text-mute transition-colors duration-200 hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+      >
+        <ArrowLeftIcon className="h-4 w-4" />
+        Back to {statusLabel} Items
+      </Link>
+
+      {editing ? (
+        <form
+          onSubmit={handleSave}
+          noValidate
+          className="animate-menu-in mt-6 mx-auto max-w-3xl rounded-card border border-line bg-surface p-5 sm:p-8"
         >
-          <span className="flex items-center gap-1.5">
-            <ArrowLeftIcon className="h-4 w-4" />
-            Back to {statusLabel} Items
-          </span>
-        </Button>
-      }
-    >
-      <div className="mx-auto w-full max-w-3xl">
-        {editing ? (
-          <form
-            onSubmit={handleSave}
-            noValidate
-            className="rounded-[8px] border border-line bg-surface p-5 sm:p-8"
-          >
-            <p
-              className={`text-xs font-semibold uppercase tracking-[0.12em] ${accentClass}`}
+          <p className="text-sm font-semibold text-mute">
+            Editing {statusLabel.toLowerCase()} item
+          </p>
+
+          <h1 className="type-title mt-3 text-2xl text-ink">
+            Edit Item Details
+          </h1>
+
+          {actionError && (
+            <div
+              className="mt-4 rounded-card border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
+              role="alert"
             >
-              Editing {statusLabel.toLowerCase()} item
-            </p>
+              <p className="font-semibold">Something went wrong</p>
+              <p className="mt-1">{actionError}</p>
+            </div>
+          )}
 
-            <h2 className="mt-3 font-serif text-2xl font-semibold text-ink">
-              Edit Item Details
-            </h2>
-
-            {actionError && (
-              <div
-                className="mt-4 rounded-[6px] border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
-                role="alert"
+          <div className="mt-6 space-y-6">
+            <div>
+              <label
+                htmlFor="edit-itemName"
+                className="mb-1.5 block text-sm font-semibold text-ink"
               >
-                <p className="font-semibold">Something went wrong</p>
-                <p className="mt-1">{actionError}</p>
-              </div>
-            )}
-
-            <div className="mt-6 space-y-6">
-              <div>
-                <label
-                  htmlFor="edit-itemName"
-                  className="mb-1.5 block text-sm font-semibold text-ink"
+                Item Name
+                <span className="ml-1 text-lost" aria-hidden="true">
+                  *
+                </span>
+                <span className="sr-only">(required)</span>
+              </label>
+              <input
+                id="edit-itemName"
+                type="text"
+                value={itemName}
+                onChange={(e) => setItemName(e.target.value)}
+                maxLength={100}
+                aria-invalid={errors.itemName ? "true" : "false"}
+                aria-describedby={
+                  errors.itemName ? "edit-itemName-error" : undefined
+                }
+                className={fieldClass(errors.itemName)}
+              />
+              {errors.itemName && (
+                <p
+                  id="edit-itemName-error"
+                  className="mt-1.5 text-sm font-medium text-lost"
                 >
-                  Item Name
-                  <span className="ml-1 text-lost" aria-hidden="true">
-                    *
-                  </span>
-                  <span className="sr-only">(required)</span>
-                </label>
-                <input
-                  id="edit-itemName"
-                  type="text"
-                  value={itemName}
-                  onChange={(e) => setItemName(e.target.value)}
-                  maxLength={100}
-                  aria-invalid={errors.itemName ? "true" : "false"}
-                  aria-describedby={
-                    errors.itemName ? "edit-itemName-error" : undefined
-                  }
-                  className={`w-full min-h-[44px] rounded-[6px] border px-3.5 py-2.5 text-sm text-ink placeholder:text-mute/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-colors duration-150 ${
-                    errors.itemName
-                      ? "border-lost bg-lost/5 focus-visible:ring-lost"
-                      : "border-line bg-paper hover:border-mute/40"
-                  }`}
-                />
-                {errors.itemName && (
-                  <p
-                    id="edit-itemName-error"
-                    className="mt-1.5 text-sm font-medium text-lost"
+                  {errors.itemName}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label
+                htmlFor="edit-category"
+                className="mb-1.5 block text-sm font-semibold text-ink"
+              >
+                Category
+                <span className="ml-1 text-lost" aria-hidden="true">
+                  *
+                </span>
+                <span className="sr-only">(required)</span>
+              </label>
+              <select
+                id="edit-category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                aria-invalid={errors.category ? "true" : "false"}
+                aria-describedby={
+                  errors.category ? "edit-category-error" : undefined
+                }
+                className={`${fieldClass(errors.category)} cursor-pointer`}
+              >
+                <option value="">Select a category</option>
+                {CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+              {errors.category && (
+                <p
+                  id="edit-category-error"
+                  className="mt-1.5 text-sm font-medium text-lost"
+                >
+                  {errors.category}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label
+                htmlFor="edit-description"
+                className="mb-1.5 block text-sm font-semibold text-ink"
+              >
+                Description
+                <span className="ml-1 text-lost" aria-hidden="true">
+                  *
+                </span>
+                <span className="sr-only">(required)</span>
+              </label>
+              <textarea
+                id="edit-description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows="5"
+                aria-invalid={errors.description ? "true" : "false"}
+                aria-describedby={
+                  errors.description ? "edit-description-error" : undefined
+                }
+                className={`w-full rounded-control border px-3.5 py-2.5 text-sm leading-relaxed text-ink placeholder:text-mute/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-colors duration-150 resize-y ${
+                  errors.description
+                    ? "border-lost bg-lost/5 focus-visible:ring-lost"
+                    : "border-line bg-surface hover:border-mute/40"
+                }`}
+              />
+              {errors.description && (
+                <p
+                  id="edit-description-error"
+                  className="mt-1.5 text-sm font-medium text-lost"
+                >
+                  {errors.description}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label
+                htmlFor="edit-location"
+                className="mb-1.5 block text-sm font-semibold text-ink"
+              >
+                {locationLabel}
+                <span className="ml-1 text-lost" aria-hidden="true">
+                  *
+                </span>
+                <span className="sr-only">(required)</span>
+              </label>
+              <input
+                id="edit-location"
+                type="text"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                maxLength={150}
+                aria-invalid={errors.location ? "true" : "false"}
+                aria-describedby={
+                  errors.location ? "edit-location-error" : undefined
+                }
+                className={fieldClass(errors.location)}
+              />
+              {errors.location && (
+                <p
+                  id="edit-location-error"
+                  className="mt-1.5 text-sm font-medium text-lost"
+                >
+                  {errors.location}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label
+                htmlFor="edit-date"
+                className="mb-1.5 block text-sm font-semibold text-ink"
+              >
+                {dateLabel}
+                <span className="ml-1 text-lost" aria-hidden="true">
+                  *
+                </span>
+                <span className="sr-only">(required)</span>
+              </label>
+              <input
+                id="edit-date"
+                type="date"
+                value={dateField}
+                onChange={(e) => setDateField(e.target.value)}
+                aria-invalid={errors.dateField ? "true" : "false"}
+                aria-describedby={
+                  errors.dateField ? "edit-date-error" : undefined
+                }
+                className={`${fieldClass(errors.dateField)} cursor-pointer`}
+              />
+              {errors.dateField && (
+                <p
+                  id="edit-date-error"
+                  className="mt-1.5 text-sm font-medium text-lost"
+                >
+                  {errors.dateField}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label
+                htmlFor="edit-contact"
+                className="mb-1.5 block text-sm font-semibold text-ink"
+              >
+                Contact Details
+                <span className="ml-1 text-lost" aria-hidden="true">
+                  *
+                </span>
+                <span className="sr-only">(required)</span>
+              </label>
+              <input
+                id="edit-contact"
+                type="tel"
+                value={contact}
+                onChange={(e) => setContact(e.target.value)}
+                maxLength={30}
+                aria-invalid={errors.contact ? "true" : "false"}
+                aria-describedby={
+                  errors.contact ? "edit-contact-error" : undefined
+                }
+                className={fieldClass(errors.contact)}
+              />
+              {errors.contact && (
+                <p
+                  id="edit-contact-error"
+                  className="mt-1.5 text-sm font-medium text-lost"
+                >
+                  {errors.contact}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label
+                htmlFor="edit-image"
+                className="mb-1.5 block text-sm font-semibold text-ink"
+              >
+                Item Image (optional)
+              </label>
+              {imageData ? (
+                <div className="rounded-card border border-line bg-surface p-3">
+                  <div className="flex h-64 w-full items-center justify-center overflow-hidden rounded-control border border-line bg-paper sm:h-80">
+                    <img
+                      src={imageData}
+                      alt=""
+                      className="h-full w-full object-contain"
+                    />
+                  </div>
+                  <div className="mt-3 flex flex-col-reverse items-stretch gap-2 sm:flex-row sm:justify-between">
+                    <p className="text-xs text-mute">
+                      Photo will be saved with your report.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleClearImage}
+                      className="inline-flex min-h-[44px] items-center justify-center rounded-control border border-line bg-surface px-3 text-xs font-semibold text-ink transition-colors duration-150 hover:border-mute/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+                    >
+                      Remove photo
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label
+                    htmlFor="edit-image"
+                    className={`flex min-h-[120px] cursor-pointer flex-col items-center justify-center gap-2 rounded-control border border-dashed px-4 py-6 text-center transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
+                      errors.image
+                        ? "border-lost bg-lost/5"
+                        : "border-line bg-surface hover:border-mute/50"
+                    }`}
                   >
-                    {errors.itemName}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label
-                  htmlFor="edit-category"
-                  className="mb-1.5 block text-sm font-semibold text-ink"
-                >
-                  Category
-                  <span className="ml-1 text-lost" aria-hidden="true">
-                    *
-                  </span>
-                  <span className="sr-only">(required)</span>
-                </label>
-                <select
-                  id="edit-category"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  aria-invalid={errors.category ? "true" : "false"}
-                  aria-describedby={
-                    errors.category ? "edit-category-error" : undefined
-                  }
-                  className={`w-full min-h-[44px] cursor-pointer rounded-[6px] border px-3.5 py-2.5 text-sm text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-colors duration-150 ${
-                    errors.category
-                      ? "border-lost bg-lost/5 focus-visible:ring-lost"
-                      : "border-line bg-paper hover:border-mute/40"
-                  }`}
-                >
-                  <option value="">Select a category</option>
-                  {CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
-                {errors.category && (
-                  <p
-                    id="edit-category-error"
-                    className="mt-1.5 text-sm font-medium text-lost"
-                  >
-                    {errors.category}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label
-                  htmlFor="edit-description"
-                  className="mb-1.5 block text-sm font-semibold text-ink"
-                >
-                  Description
-                  <span className="ml-1 text-lost" aria-hidden="true">
-                    *
-                  </span>
-                  <span className="sr-only">(required)</span>
-                </label>
-                <textarea
-                  id="edit-description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows="5"
-                  aria-invalid={errors.description ? "true" : "false"}
-                  aria-describedby={
-                    errors.description ? "edit-description-error" : undefined
-                  }
-                  className={`w-full rounded-[6px] border px-3.5 py-2.5 text-sm leading-relaxed text-ink placeholder:text-mute/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-colors duration-150 resize-y ${
-                    errors.description
-                      ? "border-lost bg-lost/5 focus-visible:ring-lost"
-                      : "border-line bg-paper hover:border-mute/40"
-                  }`}
-                />
-                {errors.description && (
-                  <p
-                    id="edit-description-error"
-                    className="mt-1.5 text-sm font-medium text-lost"
-                  >
-                    {errors.description}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label
-                  htmlFor="edit-location"
-                  className="mb-1.5 block text-sm font-semibold text-ink"
-                >
-                  {locationLabel}
-                  <span className="ml-1 text-lost" aria-hidden="true">
-                    *
-                  </span>
-                  <span className="sr-only">(required)</span>
-                </label>
-                <input
-                  id="edit-location"
-                  type="text"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  maxLength={150}
-                  aria-invalid={errors.location ? "true" : "false"}
-                  aria-describedby={
-                    errors.location ? "edit-location-error" : undefined
-                  }
-                  className={`w-full min-h-[44px] rounded-[6px] border px-3.5 py-2.5 text-sm text-ink placeholder:text-mute/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-colors duration-150 ${
-                    errors.location
-                      ? "border-lost bg-lost/5 focus-visible:ring-lost"
-                      : "border-line bg-paper hover:border-mute/40"
-                  }`}
-                />
-                {errors.location && (
-                  <p
-                    id="edit-location-error"
-                    className="mt-1.5 text-sm font-medium text-lost"
-                  >
-                    {errors.location}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label
-                  htmlFor="edit-date"
-                  className="mb-1.5 block text-sm font-semibold text-ink"
-                >
-                  {dateLabel}
-                  <span className="ml-1 text-lost" aria-hidden="true">
-                    *
-                  </span>
-                  <span className="sr-only">(required)</span>
-                </label>
-                <input
-                  id="edit-date"
-                  type="date"
-                  value={dateField}
-                  onChange={(e) => setDateField(e.target.value)}
-                  aria-invalid={errors.dateField ? "true" : "false"}
-                  aria-describedby={
-                    errors.dateField ? "edit-date-error" : undefined
-                  }
-                  className={`w-full min-h-[44px] cursor-pointer rounded-[6px] border px-3.5 py-2.5 text-sm text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-colors duration-150 ${
-                    errors.dateField
-                      ? "border-lost bg-lost/5 focus-visible:ring-lost"
-                      : "border-line bg-paper hover:border-mute/40"
-                  }`}
-                />
-                {errors.dateField && (
-                  <p
-                    id="edit-date-error"
-                    className="mt-1.5 text-sm font-medium text-lost"
-                  >
-                    {errors.dateField}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label
-                  htmlFor="edit-contact"
-                  className="mb-1.5 block text-sm font-semibold text-ink"
-                >
-                  Contact Details
-                  <span className="ml-1 text-lost" aria-hidden="true">
-                    *
-                  </span>
-                  <span className="sr-only">(required)</span>
-                </label>
-                <input
-                  id="edit-contact"
-                  type="tel"
-                  value={contact}
-                  onChange={(e) => setContact(e.target.value)}
-                  maxLength={30}
-                  aria-invalid={errors.contact ? "true" : "false"}
-                  aria-describedby={
-                    errors.contact ? "edit-contact-error" : undefined
-                  }
-                  className={`w-full min-h-[44px] rounded-[6px] border px-3.5 py-2.5 text-sm text-ink placeholder:text-mute/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-colors duration-150 ${
-                    errors.contact
-                      ? "border-lost bg-lost/5 focus-visible:ring-lost"
-                      : "border-line bg-paper hover:border-mute/40"
-                  }`}
-                />
-                {errors.contact && (
-                  <p
-                    id="edit-contact-error"
-                    className="mt-1.5 text-sm font-medium text-lost"
-                  >
-                    {errors.contact}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label
-                  htmlFor="edit-image"
-                  className="mb-1.5 block text-sm font-semibold text-ink"
-                >
-                  Item Image (optional)
-                </label>
-                {imageData ? (
-                  <div className="rounded-[6px] border border-line bg-paper p-3">
-                    <div className="overflow-hidden rounded-[4px] border border-line bg-surface">
-                      <img
-                        src={imageData}
-                        alt=""
-                        className="h-56 w-full object-contain bg-ink/5"
-                      />
-                    </div>
-                    <div className="mt-3 flex flex-col-reverse items-stretch gap-2 sm:flex-row sm:justify-between">
-                      <p className="text-xs text-mute">
-                        Photo will be saved with your report.
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className={`h-6 w-6 ${errors.image ? "text-lost" : "text-mute"}`}
+                      aria-hidden="true"
+                    >
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                      <circle cx="8.5" cy="8.5" r="1.5" />
+                      <polyline points="21 15 16 10 5 21" />
+                    </svg>
+                    <div>
+                      <p className={`text-sm font-semibold ${errors.image ? "text-lost" : "text-ink"}`}>
+                        {errors.image ? errors.image : "Click to choose a photo"}
                       </p>
-                      <button
-                        type="button"
-                        onClick={handleClearImage}
-                        className="inline-flex min-h-[36px] items-center justify-center rounded-[4px] border border-line bg-surface px-3 text-xs font-semibold text-ink transition-colors duration-150 hover:border-mute/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+                      <p className="mt-1 text-xs text-mute">
+                        JPEG, PNG, or WebP. Maximum 500 KB.
+                      </p>
+                    </div>
+                  </label>
+                  <input
+                    id="edit-image"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleImageChange}
+                    aria-invalid={errors.image ? "true" : "false"}
+                    aria-describedby={errors.image ? "edit-image-error" : undefined}
+                    className="sr-only"
+                  />
+                  {errors.image && (
+                    <p
+                      id="edit-image-error"
+                      className="mt-1.5 text-sm font-medium text-lost"
+                    >
+                      {errors.image}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-8 flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:justify-between">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleCancelEdit}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant={reportVariant}
+              className="w-full sm:w-auto"
+            >
+              Save Changes
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <>
+          <Reveal>
+            <article className="mt-6 rounded-card border border-line bg-surface">
+              {actionError && (
+                <div
+                  className="m-5 rounded-card border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
+                  role="alert"
+                >
+                  <p className="font-semibold">Something went wrong</p>
+                  <p className="mt-1">{actionError}</p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 lg:grid-cols-5">
+                <div className="min-w-0 border-b border-line p-5 sm:p-6 lg:col-span-2 lg:border-b-0 lg:border-r">
+                  <div
+                    className={`overflow-hidden rounded-control border bg-paper ${
+                      isFound ? "border-found/30" : "border-lost/30"
+                    }`}
+                  >
+                    <ItemImage
+                      type={type}
+                      imageData={item.imageData}
+                      alt={`Photo of ${displayName}`}
+                      className="h-72 w-full sm:h-80 lg:h-96"
+                    />
+                  </div>
+                </div>
+
+                <div className="min-w-0 p-5 sm:p-6 lg:col-span-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <TypeChip
+                      tone={isFound ? "found" : "lost"}
+                      icon={isFound ? FoundIcon : LostIcon}
+                      label={isFound ? "Found item" : "Lost item"}
+                    />
+                    <span className="text-sm font-medium text-mute">
+                      {item.category}
+                    </span>
+                  </div>
+
+                  <h1 className="type-title mt-3 break-words text-2xl text-ink sm:text-3xl">
+                    {displayName}
+                  </h1>
+
+                  <dl className="mt-6 grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+                    <div className="min-w-0">
+                      <dt className="text-xs font-semibold uppercase tracking-wide text-mute">
+                        {dateLabel}
+                      </dt>
+                      <dd className="mt-1.5 flex min-w-0 items-center gap-1.5 break-words text-sm font-medium text-ink">
+                        <CalendarIcon
+                          size={16}
+                          className="shrink-0 text-mute"
+                          aria-hidden="true"
+                        />
+                        {displayDate}
+                      </dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-xs font-semibold uppercase tracking-wide text-mute">
+                        {locationLabel}
+                      </dt>
+                      <dd className="mt-1.5 flex min-w-0 items-center gap-1.5 break-words text-sm font-medium text-ink">
+                        <PinIcon
+                          size={16}
+                          className="shrink-0 text-mute"
+                          aria-hidden="true"
+                        />
+                        {item.location}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <div className="mt-6 rounded-card border border-line bg-paper p-4">
+                    <p className="text-sm leading-6 text-ink">
+                      {isFound
+                        ? "This looks like yours? The possible matches below help you confirm ownership before arranging the return."
+                        : "Found this item? The possible matches below link you to the owner for a safe recovery."}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      onClick={scrollToMatches}
+                      className="mt-3 w-full sm:w-auto"
+                    >
+                      See possible matches
+                    </Button>
+                  </div>
+
+                  <h2 className="type-eyebrow mt-6 text-mute">Description</h2>
+                  <p className="mt-2 whitespace-pre-wrap break-words text-base leading-7 text-ink">
+                    {item.description}
+                  </p>
+
+                  <div
+                    className={`mt-6 rounded-control border p-5 ${
+                      isFound
+                        ? "border-found/25 bg-found/5"
+                        : "border-lost/25 bg-lost/5"
+                    }`}
+                  >
+                    <p
+                      className={`flex items-center gap-1.5 text-xs font-semibold ${
+                        isFound ? "text-found" : "text-lost"
+                      }`}
+                    >
+                      {isFound ? (
+                        <FoundIcon size={14} aria-hidden="true" />
+                      ) : (
+                        <LostIcon size={14} aria-hidden="true" />
+                      )}
+                      Contact Information
+                    </p>
+                    <p className="mt-2 break-words text-base font-medium text-ink">
+                      {item.contact}
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-mute">
+                      {isFound
+                        ? "This is the person who found the item. Reach out to arrange a safe return on campus."
+                        : "This is the person who reported the item missing. Get in touch if you found it."}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-line p-5 sm:p-6">
+                {canManage && confirmingDelete ? (
+                  <div
+                    className="rounded-card border border-line bg-paper/50 p-5"
+                    role="group"
+                    aria-label="Confirm delete"
+                  >
+                    <p className="text-base font-semibold text-ink">
+                      Delete this {statusLabel.toLowerCase()} item?
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-mute">
+                      &ldquo;{displayName || "This item"}&rdquo; will be
+                      removed from the{" "}
+                      {statusLabel.toLowerCase()} items list. This cannot be
+                      undone.
+                    </p>
+                    <div className="mt-5 flex flex-col-reverse items-stretch gap-3 sm:flex-row">
+                      <Button
+                        variant="secondary"
+                        onClick={handleCancelDelete}
                       >
-                        Remove photo
-                      </button>
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="dangerSolid"
+                        onClick={handleConfirmDelete}
+                      >
+                        Yes, Delete
+                      </Button>
                     </div>
                   </div>
                 ) : (
-                  <div>
-                    <label
-                      htmlFor="edit-image"
-                      className={`flex min-h-[120px] cursor-pointer flex-col items-center justify-center gap-2 rounded-[6px] border border-dashed px-4 py-6 text-center transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
-                        errors.image
-                          ? "border-lost bg-lost/5"
-                          : "border-line bg-paper hover:border-mute/50"
-                      }`}
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className={`h-6 w-6 ${errors.image ? "text-lost" : "text-mute"}`}
-                        aria-hidden="true"
-                      >
-                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                        <circle cx="8.5" cy="8.5" r="1.5" />
-                        <polyline points="21 15 16 10 5 21" />
-                      </svg>
-                      <div>
-                        <p className={`text-sm font-semibold ${errors.image ? "text-lost" : "text-ink"}`}>
-                          {errors.image ? errors.image : "Click to choose a photo"}
-                        </p>
-                        <p className="mt-1 text-xs text-mute">
-                          JPEG, PNG, or WebP. Maximum 500 KB.
-                        </p>
+                  <div className="flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:justify-between">
+                    {canManage ? (
+                      <div className="flex flex-col-reverse items-stretch gap-3 sm:flex-row">
+                        <Button
+                          variant="secondary"
+                          onClick={startEditing}
+                          className="w-full sm:w-auto"
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="danger"
+                          onClick={() => setConfirmingDelete(true)}
+                          className="w-full sm:w-auto"
+                        >
+                          Delete
+                        </Button>
                       </div>
-                    </label>
-                    <input
-                      id="edit-image"
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      onChange={handleImageChange}
-                      aria-invalid={errors.image ? "true" : "false"}
-                      aria-describedby={errors.image ? "edit-image-error" : undefined}
-                      className="sr-only"
-                    />
-                    {errors.image && (
-                      <p
-                        id="edit-image-error"
-                        className="mt-1.5 text-sm font-medium text-lost"
-                      >
-                        {errors.image}
-                      </p>
-                    )}
+                    ) : null}
+                    <Button
+                      to={reportPath}
+                      variant={reportVariant}
+                      className="w-full sm:w-auto"
+                    >
+                      Report Another {statusLabel} Item
+                    </Button>
                   </div>
                 )}
               </div>
-            </div>
+            </article>
+          </Reveal>
 
-            <div className="mt-8 flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:justify-between">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={handleCancelEdit}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant={reportVariant}
-                className="w-full sm:w-auto"
-              >
-                Save Changes
-              </Button>
-            </div>
-          </form>
-        ) : (
-          <article className="rounded-[8px] border border-line bg-surface p-5 sm:p-8">
-            {actionError && (
-              <div
-                className="mb-6 rounded-[6px] border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
-                role="alert"
-              >
-                <p className="font-semibold">Something went wrong</p>
-                <p className="mt-1">{actionError}</p>
-              </div>
-            )}
-
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span
-                className={`inline-flex rounded-[4px] border px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.08em] ${badgeClass}`}
-              >
-                {statusLabel}
-              </span>
-              <span className="text-sm text-mute">{item.category}</span>
-            </div>
-
-            <h1
-              className={`mt-4 break-words font-serif text-3xl font-semibold sm:text-4xl ${accentClass}`}
-            >
-              {displayName}
-            </h1>
-
-            {item.imageData && (
-              <div className="mt-6 overflow-hidden rounded-[6px] border border-line bg-ink/5">
-                <img
-                  src={item.imageData}
-                  alt=""
-                  className="max-h-[420px] w-full object-contain"
-                />
-              </div>
-            )}
-
-            <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.1em] text-mute">
-                  Category
-                </p>
-                <p className="mt-1.5 break-words text-base font-medium text-ink">
-                  {item.category}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.1em] text-mute">
-                  {dateLabel}
-                </p>
-                <p className="mt-1.5 break-words text-base font-medium text-ink">
-                  {displayDate}
-                </p>
-              </div>
-
-              <div className="sm:col-span-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.1em] text-mute">
-                  {locationLabel}
-                </p>
-                <p className="mt-1.5 break-words text-base font-medium text-ink">
-                  {item.location}
-                </p>
-              </div>
-
-              <div className="sm:col-span-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.1em] text-mute">
-                  Description
-                </p>
-                <p className="mt-1.5 whitespace-pre-wrap break-words text-base leading-7 text-ink">
-                  {item.description}
-                </p>
-              </div>
-
-              <div className="sm:col-span-2">
-                <div className="rounded-[6px] border border-line bg-paper p-5">
-                  <p className="text-xs font-semibold uppercase tracking-[0.1em] text-mute">
-                    Contact Information
-                  </p>
-                  <p className="mt-2 break-words text-base font-medium text-ink">
-                    {item.contact}
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-mute">
-                    {isFound
-                      ? "This is the person who found the item. Reach out to arrange a safe return on campus."
-                      : "This is the person who reported the item missing. Get in touch if you found it."}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {confirmingDelete ? (
-              <div
-                className="mt-8 rounded-[6px] border border-line bg-paper p-5"
-                role="group"
-                aria-label="Confirm delete"
-              >
-                <p className="text-base font-semibold text-ink">
-                  Delete this {statusLabel.toLowerCase()} item?
-                </p>
-                <p className="mt-1 text-sm leading-6 text-mute">
-                  "{displayName || "This item"}" will be removed from the{" "}
-                  {statusLabel.toLowerCase()} items list. This cannot be undone.
-                </p>
-                <div className="mt-5 flex flex-col-reverse items-stretch gap-3 sm:flex-row">
-                  <Button variant="secondary" onClick={handleCancelDelete}>
-                    Cancel
-                  </Button>
-                  <Button variant="dangerSolid" onClick={handleConfirmDelete}>
-                    Yes, Delete
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="mt-8 flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:justify-between">
-                {canManage ? (
-                <div className="flex flex-col-reverse items-stretch gap-3 sm:flex-row">
-                  <Button
-                    variant="secondary"
-                    onClick={startEditing}
-                    className="w-full sm:w-auto"
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    variant="danger"
-                    onClick={() => setConfirmingDelete(true)}
-                    className="w-full sm:w-auto"
-                  >
-                    Delete
-                  </Button>
-                </div>
-              ) : null}
-              <Button
-                to={reportPath}
-                variant={reportVariant}
-                className="w-full sm:w-auto"
-              >
-                Report Another {statusLabel} Item
-              </Button>
-              </div>
-            )}
-          </article>
-        )}
-
-        {!editing ? (
           <PossibleMatches
             type={type}
             item={item}
@@ -876,9 +903,9 @@ function ItemDetails({ type }) {
             candidatesLoading={oppositeLoading}
             candidatesLoadError={oppositeLoadError}
           />
-        ) : null}
-      </div>
-    </PageShell>
+        </>
+      )}
+    </div>
   );
 }
 

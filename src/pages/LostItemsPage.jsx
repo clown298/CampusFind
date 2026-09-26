@@ -1,11 +1,14 @@
 import { useContext, useMemo, useState } from "react";
 import { LostItemContext } from "../context/LostItemContext";
-import PageShell from "../components/PageShell";
 import FilterBar from "../components/FilterBar";
 import ItemCard from "../components/ItemCard";
+import PageShell from "../components/PageShell";
 import { getItemTimestamp } from "../utils/items";
 import EmptyState from "../components/EmptyState";
 import Button from "../components/Button";
+import Reveal from "../components/Reveal";
+
+const eyebrow = "GCOEC • Campus Lost & Found";
 
 function LostItemsPage() {
   const { lostItems, deleteLostItem, updateLostItem, isLoading, loadError } =
@@ -56,18 +59,18 @@ function LostItemsPage() {
     search.trim() !== "" || category !== "All";
   const showing = filteredItems.length;
   const total = lostItems.length;
-  const countLabel = showing === 1 ? "item" : "items";
-  const headerCount = hasFilters
-    ? `${showing} of ${total} ${total === 1 ? "item" : "items"}`
-    : `${total} ${total === 1 ? "item" : "items"}`;
+  const statusText = hasFilters
+    ? `Showing ${showing} of ${total} lost ${total === 1 ? "item" : "items"}`
+    : `${total} lost ${total === 1 ? "item" : "items"}`;
 
   return (
     <PageShell
       title="Lost Items"
-      description="Browse items students have reported missing on campus. Search by item name, category, or location."
-      meta={headerCount}
+      eyebrow={eyebrow}
+      description="Items reported missing across campus. Search by item name, category, or location."
+      tone="lost"
       action={
-        <Button to="/report-lost" variant="primary" className="w-full sm:w-auto">
+        <Button to="/report-lost" variant="lost" className="w-full sm:w-auto">
           Report Lost Item
         </Button>
       }
@@ -85,7 +88,7 @@ function LostItemsPage() {
 
       {loadError && (
         <div
-          className="mb-4 rounded-[6px] border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
+          className="mb-4 rounded-card border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
           role="alert"
         >
           <p className="font-semibold">Lost items unavailable</p>
@@ -95,7 +98,7 @@ function LostItemsPage() {
 
       {isLoading ? (
         <div
-          className="rounded-[8px] border border-line bg-surface px-5 py-10 text-center sm:px-8"
+          className="rounded-card border border-line bg-surface px-5 py-10 text-center sm:px-8"
           role="status"
         >
           <p className="text-sm font-semibold text-mute">
@@ -109,7 +112,7 @@ function LostItemsPage() {
             description="When someone reports a missing belonging, it will appear here for other students to check."
             actionLabel="Report Lost Item"
             actionTo="/report-lost"
-            variant="primary"
+            variant="lost"
           />
         ) : (
           <EmptyState
@@ -117,28 +120,30 @@ function LostItemsPage() {
             description="Try changing your search or category, or report a lost item."
             actionLabel="Report Lost Item"
             actionTo="/report-lost"
-            variant="primary"
+            variant="lost"
           />
         )
       ) : (
-        <>
-          <p className="mb-4 text-sm text-mute" role="status">
-            {hasFilters
-              ? `Showing ${showing} of ${total} ${countLabel}`
-              : `Showing ${showing} ${countLabel}`}
-          </p>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5 lg:gap-6">
-            {filteredItems.map((item) => (
-              <ItemCard
-                key={item.id}
-                type="lost"
-                item={item}
-                onUpdate={updateLostItem}
-                onDelete={deleteLostItem}
-              />
-            ))}
+        <Reveal className="min-w-0">
+          <div>
+            <h2 className="sr-only">Lost item listings</h2>
+            <p className="mb-4 text-sm font-medium text-mute" role="status">
+              {statusText}
+            </p>
+            <ul className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredItems.map((item) => (
+                <li key={item.id} className="h-full min-w-0">
+                  <ItemCard
+                    type="lost"
+                    item={item}
+                    onUpdate={updateLostItem}
+                    onDelete={deleteLostItem}
+                  />
+                </li>
+              ))}
+            </ul>
           </div>
-        </>
+        </Reveal>
       )}
     </PageShell>
   );

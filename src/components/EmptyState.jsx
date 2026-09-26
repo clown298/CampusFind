@@ -1,10 +1,41 @@
 import Button from "./Button";
+import { CampusIcon, FoundIcon, LostIcon } from "./icons";
 
-function EmptyState({ title, description, actionLabel, actionTo, variant = "primary" }) {
+const ICONS = {
+  lost: LostIcon,
+  found: FoundIcon,
+  primary: CampusIcon,
+};
+
+const CHIP_TONES = {
+  lost: "bg-lost/10 text-lost",
+  found: "bg-found/10 text-found",
+  primary: "bg-paper text-ink",
+};
+
+function EmptyState({
+  title,
+  description,
+  actionLabel,
+  actionTo,
+  variant = "primary",
+}) {
+  const Icon = ICONS[variant] || CampusIcon;
+
   return (
-    <div className="rounded-[8px] border border-line bg-surface px-5 py-10 text-center sm:px-8">
-      <h2 className="font-serif text-2xl font-semibold text-ink">{title}</h2>
-      <p className="mx-auto mt-3 max-w-lg text-base leading-6 text-mute">
+    <div className="rounded-card border border-line bg-surface px-5 py-12 text-center sm:px-8">
+      <span
+        className={`inline-flex h-12 w-12 items-center justify-center rounded-control ${
+          CHIP_TONES[variant] || CHIP_TONES.primary
+        }`}
+        aria-hidden="true"
+      >
+        <Icon size={24} />
+      </span>
+      <h2 className="type-section mt-5 text-xl text-ink sm:text-2xl">
+        {title}
+      </h2>
+      <p className="mx-auto mt-2 max-w-lg text-[0.9375rem] leading-6 text-mute">
         {description}
       </p>
       {actionLabel && actionTo ? (

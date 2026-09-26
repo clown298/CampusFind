@@ -1,4 +1,5 @@
 import { useId } from "react";
+import { SearchIcon } from "./icons";
 
 const CATEGORIES = [
   "All",
@@ -10,8 +11,11 @@ const CATEGORIES = [
   "Other",
 ];
 
-const controlClassName =
-  "h-11 w-full min-w-0 rounded-[6px] border border-line bg-surface px-3 text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-paper";
+const selectClassName =
+  "h-11 w-full min-w-0 cursor-pointer rounded-control border border-line bg-surface px-3 text-sm text-ink transition-colors duration-150 hover:border-mute/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
+
+const searchClassName =
+  "h-11 w-full min-w-0 rounded-control border border-line bg-surface pl-10 pr-3 text-sm text-ink placeholder:text-mute/70 transition-colors duration-150 hover:border-mute/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
 
 function FilterBar({
   search,
@@ -30,36 +34,32 @@ function FilterBar({
   const sortId = useId();
 
   return (
-    <div className="mb-6 grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <div className="min-w-0 sm:col-span-2 lg:col-span-1">
-        <label
-          htmlFor={searchId}
-          className="mb-2 block text-sm font-semibold text-ink"
+    <div className="mb-6 grid min-w-0 grid-cols-1 gap-3 rounded-card border border-line/80 bg-surface p-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
+      <div className="relative min-w-0">
+        <span
+          className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5"
+          aria-hidden="true"
         >
-          {searchLabel}
-        </label>
+          <SearchIcon size={18} className="text-mute" />
+        </span>
         <input
           id={searchId}
           type="search"
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder={searchPlaceholder}
-          className={`${controlClassName} placeholder:text-mute`}
+          aria-label={searchLabel}
+          className={searchClassName}
         />
       </div>
 
       <div className="min-w-0">
-        <label
-          htmlFor={categoryId}
-          className="mb-2 block text-sm font-semibold text-ink"
-        >
-          {categoryLabel}
-        </label>
         <select
           id={categoryId}
           value={category}
           onChange={(e) => onCategoryChange(e.target.value)}
-          className={controlClassName}
+          aria-label={categoryLabel}
+          className={selectClassName}
         >
           {CATEGORIES.map((option) => (
             <option key={option} value={option}>
@@ -71,17 +71,12 @@ function FilterBar({
 
       {onSortChange ? (
         <div className="min-w-0">
-          <label
-            htmlFor={sortId}
-            className="mb-2 block text-sm font-semibold text-ink"
-          >
-            {sortLabel}
-          </label>
           <select
             id={sortId}
             value={sort}
             onChange={(e) => onSortChange(e.target.value)}
-            className={controlClassName}
+            aria-label={sortLabel}
+            className={selectClassName}
           >
             <option value="newest">Newest first</option>
             <option value="oldest">Oldest first</option>

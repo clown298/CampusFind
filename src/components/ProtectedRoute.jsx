@@ -9,10 +9,10 @@ function ProtectedRoute({ children }) {
   if (loading) {
     return (
       <div
-        className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6"
+        className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-8"
         role="status"
       >
-        <div className="rounded-[8px] border border-line bg-surface px-5 py-10 text-center">
+        <div className="rounded-card border border-line bg-surface px-5 py-10 text-center">
           <p className="text-sm font-semibold text-mute">
             Checking your session…
           </p>
