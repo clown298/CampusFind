@@ -1,13 +1,17 @@
+const helmet = require('helmet')
 const path = require('path')
 const express = require('express')
 const cors = require('cors')
 const morgan = require('morgan')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
+const rateLimit = require('express-rate-limit')
 const pool = require('./config/db')
 const { ensureSchema } = require('./config/schema')
 
 const app = express()
+
+app.use(helmet())
 
 app.use(
   cors({
@@ -16,6 +20,23 @@ app.use(
   })
 )
 app.use(express.json({ limit: '5mb' }))
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 100,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+})
+
+app.use('/api', apiLimiter)
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'test',
+})
 app.use(morgan('dev'))
 
 // ---------------------------------------------------------------------------
@@ -61,7 +82,7 @@ if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
   process.exit(1)
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'campusfind-local-dev-secret'
+const JWT_SECRET = process.env.JWT_SECRET
 const COOKIE_NAME = 'campusfind_token'
 const TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
@@ -180,7 +201,7 @@ function validateLogin(body) {
 // Auth routes
 // ---------------------------------------------------------------------------
 
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', authLimiter, async (req, res) => {
   const errors = validateRegister(req.body)
   if (Object.keys(errors).length > 0) {
     return res.status(400).json({ message: 'Validation failed.', errors })
@@ -220,7 +241,7 @@ app.post('/api/auth/register', async (req, res) => {
   }
 })
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   const errors = validateLogin(req.body)
   if (Object.keys(errors).length > 0) {
     return res.status(400).json({ message: 'Validation failed.', errors })
@@ -491,15 +512,17 @@ if (process.env.NODE_ENV !== 'production') {
   })
 }
 
-app.get('/api/test-db', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT NOW()')
-    res.json({ message: 'Database connected successfully!', time: result.rows[0].now })
-  } catch (error) {
-    console.error('Database error:', error.message)
-    res.status(500).json({ message: 'Database connection failed' })
-  }
-})
+if (process.env.NODE_ENV !== 'production') {
+  app.get('/api/test-db', async (req, res) => {
+    try {
+      const result = await pool.query('SELECT NOW()')
+      res.json({ message: 'Database connected successfully!', time: result.rows[0].now })
+    } catch (error) {
+      console.error('Database error:', error.message)
+      res.status(500).json({ message: 'Database connection failed' })
+    }
+  })
+}
 
 // ---------------------------------------------------------------------------
 // Lost Items CRUD
