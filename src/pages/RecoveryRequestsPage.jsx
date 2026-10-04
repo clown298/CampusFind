@@ -26,7 +26,7 @@ const STATUS_META = {
     tint: "border-pending/25 bg-pending/5",
     accent: "border-l-pending",
     dot: "bg-pending",
-    note: "Awaiting review by the item owner.",
+    note: "Awaiting review by the campus admin.",
     next: "Review the claimant's details, then approve the request if the item is theirs, or reject it.",
     progessIndex: 1,
   },
@@ -224,7 +224,7 @@ function RequestActions({ request }) {
 }
 
 function RecoveryRequestsPage() {
-  const { user, isAuthenticated, loading: authLoading } =
+  const { user, isAuthenticated, isAdmin, loading: authLoading } =
     useContext(AuthContext);
   const { recoveryRequests, isLoading, loadError, refreshRequests } =
     useContext(RecoveryRequestContext);
@@ -311,8 +311,8 @@ function RecoveryRequestsPage() {
             </h2>
             <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-mute">
               Recovery requests contain private claimant details, so they are
-              only visible to the owner of the lost item and the claimant who
-              submitted them.
+              only visible to the campus admin, the owner of the lost item and the
+              claimant who submitted them.
             </p>
             <div className="mt-6 flex flex-col-reverse items-stretch justify-center gap-3 sm:flex-row">
               <Button
@@ -345,16 +345,20 @@ function RecoveryRequestsPage() {
     );
   }
 
+  const description = isAdmin
+    ? "Review every recovery request submitted by students. Approve a request when the claimant proves ownership, reject it, or mark an approved request recovered after the item is returned."
+    : "Track the recovery requests you submitted and the ones raised against your lost items. The campus admin reviews each request and updates the status here.";
+
   return (
     <PageShell
       title="Recovery Requests"
-      description="Review requests related to items you may be able to recover or return. Approve a request when the claimant proves ownership, reject it, or mark an approved request recovered after the item is returned."
+      description={description}
       eyebrow="GCOEC • Campus Lost & Found"
       icon={
         <TypeChip
           tone="recovered"
           icon={ShieldIcon}
-          label="Recovery workflow"
+          label={isAdmin ? "Admin review queue" : "Recovery workflow"}
         />
       }
       tone="recovered"
@@ -382,7 +386,11 @@ function RecoveryRequestsPage() {
       ) : recoveryRequests.length === 0 ? (
         <EmptyState
           title="No recovery requests yet"
-          description="When another student submits a recovery request against one of your lost items, it will appear here for review."
+          description={
+            isAdmin
+              ? "When a student submits a recovery request for a lost item, it will appear here for your review."
+              : "When you submit a recovery request, or when a claim is made on one of your lost items, it will appear here with its status."
+          }
         />
       ) : (
         <div>
@@ -428,16 +436,16 @@ function RecoveryRequestsPage() {
           <div className="space-y-5">
             {visibleRequests.map((request) => {
               const meta = STATUS_META[request.status] || STATUS_META.pending;
-              const isOwner = Boolean(
-                user &&
-                  request.lostOwnerId &&
-                  String(request.lostOwnerId) === String(user.id)
-              );
               const isClaimant = Boolean(
                 user &&
                   request.claimantUserId &&
                   String(request.claimantUserId) === String(user.id)
               );
+              // Students only follow the status; the admin reviews it.
+              const statusLabel =
+                request.status === "pending" && !isAdmin
+                  ? "Pending Admin Review"
+                  : meta.label;
               return (
                 <Reveal
                   as="article"
@@ -446,7 +454,7 @@ function RecoveryRequestsPage() {
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <StatusChip
-                      label={meta.label}
+                      label={statusLabel}
                       classes={meta.chip}
                       dot={meta.dot}
                     />
@@ -547,19 +555,24 @@ function RecoveryRequestsPage() {
                     }`}
                   >
                     <p className="text-sm font-semibold text-ink">
-                      {meta.label} and what happens next
+                      {statusLabel} and what happens next
                     </p>
                     <p className="mt-1 text-sm leading-6 text-mute">
-                      {isOwner ? meta.next : meta.note}
+                      {isAdmin ? meta.next : meta.note}
                     </p>
                   </div>
 
-                  {isOwner ? (
+                  {isAdmin ? (
                     <RequestActions request={request} />
                   ) : isClaimant ? (
                     <p className="mt-4 text-sm leading-6 text-mute">
                       This is a request you submitted. Status updates are handled
-                      by the lost item owner.
+                      by the campus admin.
+                    </p>
+                  ) : request.status === "pending" ? (
+                    <p className="mt-4 text-sm leading-6 text-mute">
+                      You reported this lost item. The campus admin will review
+                      the claim and update the status here.
                     </p>
                   ) : null}
                 </Reveal>

@@ -98,59 +98,57 @@ function Login() {
       description="Government College of Engineering, Chandrapur"
       footer={footer}
     >
-      <h2 className="type-title text-2xl text-ink">
-        Welcome back
-      </h2>
-        <p className="mt-2 text-sm leading-6 text-mute">
-          Sign in to report items, track your reports, and manage recovery
-          requests.
-        </p>
+<h2 className="type-title text-2xl text-ink">Welcome back</h2>
+      <p className="mt-2 text-sm leading-6 text-mute">
+        Sign in to report items, track your reports, and manage recovery
+        requests.
+      </p>
 
-        {formError && (
-          <div
-            className="mt-6 rounded-card border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
-            role="alert"
-          >
-            <p className="font-semibold">Login failed</p>
-            <p className="mt-1">{formError}</p>
-          </div>
-        )}
+      {formError && (
+        <div
+          className="mt-6 rounded-card border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
+          role="alert"
+        >
+          <p className="font-semibold">Login failed</p>
+          <p className="mt-1">{formError}</p>
+        </div>
+      )}
 
-        <form onSubmit={handleSubmit} noValidate className="mt-6 space-y-5">
-          <AuthField
-            id="login-email"
-            label="Email"
-            type="email"
-            name="email"
-            value={email}
-            onChange={(e) => handleChange("email", e.target.value)}
-            autoComplete="email"
-            placeholder="you@campus.edu"
-            required
-            error={errors.email}
-          />
-          <AuthField
-            id="login-password"
-            label="Password"
-            type="password"
-            name="password"
-            value={password}
-            onChange={(e) => handleChange("password", e.target.value)}
-            autoComplete="current-password"
-            placeholder="Your password"
-            required
-            error={errors.password}
-          />
-          <Button
-            type="submit"
-            variant="primary"
-            disabled={isSubmitting}
-            aria-disabled={isSubmitting}
-            className="w-full"
-          >
-            {isSubmitting ? "Signing in…" : "Sign in"}
-          </Button>
-        </form>
+      <form onSubmit={handleSubmit} noValidate className="mt-6 space-y-5">
+        <AuthField
+          id="login-email"
+          label="Email"
+          type="email"
+          name="email"
+          value={email}
+          onChange={(e) => handleChange("email", e.target.value)}
+          autoComplete="email"
+          placeholder="you@campus.edu"
+          required
+          error={errors.email}
+        />
+        <AuthField
+          id="login-password"
+          label="Password"
+          type="password"
+          name="password"
+          value={password}
+          onChange={(e) => handleChange("password", e.target.value)}
+          autoComplete="current-password"
+          placeholder="Your password"
+          required
+          error={errors.password}
+        />
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={isSubmitting}
+          aria-disabled={isSubmitting}
+          className="w-full"
+        >
+          {isSubmitting ? "Signing in…" : "Sign in"}
+        </Button>
+      </form>
     </AuthLayout>
   );
 }

@@ -83,6 +83,7 @@ function AuthProvider({ children }) {
         user,
         loading,
         isAuthenticated: Boolean(user),
+        isAdmin: Boolean(user && user.isAdmin),
         login,
         register,
         logout,

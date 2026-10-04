@@ -1,4 +1,6 @@
 process.env.NODE_ENV = 'test'
+// Use a throwaway admin identity in tests instead of the real admin account.
+process.env.ADMIN_EMAIL = 'campusfind.admin.auth.test@campus.test'
 
 const { describe, it, before, after } = require('node:test')
 const assert = require('node:assert/strict')
@@ -48,6 +50,27 @@ async function register(name) {
   assert.equal(res.status, 201)
   createdUserIds.push(res.data.user.id)
   return { user: res.data.user, email, cookie: res.cookie }
+}
+
+let adminAccount = null
+
+async function registerAdmin() {
+  const email = process.env.ADMIN_EMAIL
+  const res = await raw('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Campus Admin', email, password: 'password123' },
+  })
+  assert.equal(res.status, 201)
+  createdUserIds.push(res.data.user.id)
+  return { user: res.data.user, email, cookie: res.cookie }
+}
+
+// Registered once and reused: only one admin account may exist.
+async function ensureAdmin() {
+  if (!adminAccount) {
+    adminAccount = await registerAdmin()
+  }
+  return adminAccount
 }
 
 function itemBody(kind, name) {
@@ -271,7 +294,7 @@ describe('Phase 6 - Ownership', () => {
     assert.match(res.data.message, /permission/)
   })
 
-  it('15. user cannot delete another user report (403)', async () => {
+it('15. user cannot delete another user report (403)', async () => {
     const owner = await register('Owner C')
     const intruder = await register('Owner D')
     const item = await createItem('found', 'ProtectedFound', owner.cookie)
@@ -280,6 +303,90 @@ describe('Phase 6 - Ownership', () => {
       cookie: intruder.cookie,
     })
     assert.equal(res.status, 403)
+  })
+
+  it('26. admin can edit any Lost report', async () => {
+    const owner = await register('Admin Lost Owner')
+    const admin = await ensureAdmin()
+    const item = await createItem('lost', 'AdminEditsLost', owner.cookie)
+    const res = await raw(`/api/lost-items/${item.id}`, {
+      method: 'PUT',
+      cookie: admin.cookie,
+      body: { ...itemBody('lost', 'AdminRenamedLost'), description: 'Moderated by admin.' },
+    })
+    assert.equal(res.status, 200)
+    assert.equal(res.data.item.itemName, 'AdminRenamedLost')
+    assert.equal(res.data.item.userId, owner.user.id)
+  })
+
+  it('27. admin can delete any Lost report', async () => {
+    const owner = await register('Admin Lost Deleter')
+    const admin = await ensureAdmin()
+    const item = await createItem('lost', 'AdminDeletesLost', owner.cookie)
+    const res = await raw(`/api/lost-items/${item.id}`, {
+      method: 'DELETE',
+      cookie: admin.cookie,
+    })
+    assert.equal(res.status, 200)
+    const gone = await raw(`/api/lost-items/${item.id}`)
+    assert.equal(gone.status, 404)
+  })
+
+  it('28. admin can edit any Found report', async () => {
+    const owner = await register('Admin Found Owner')
+    const admin = await ensureAdmin()
+    const item = await createItem('found', 'AdminEditsFound', owner.cookie)
+    const res = await raw(`/api/found-items/${item.id}`, {
+      method: 'PUT',
+      cookie: admin.cookie,
+      body: { ...itemBody('found', 'AdminRenamedFound'), description: 'Moderated by admin.' },
+    })
+    assert.equal(res.status, 200)
+    assert.equal(res.data.item.itemName, 'AdminRenamedFound')
+    assert.equal(res.data.item.userId, owner.user.id)
+  })
+
+  it('29. admin can delete any Found report', async () => {
+    const owner = await register('Admin Found Deleter')
+    const admin = await ensureAdmin()
+    const item = await createItem('found', 'AdminDeletesFound', owner.cookie)
+    const res = await raw(`/api/found-items/${item.id}`, {
+      method: 'DELETE',
+      cookie: admin.cookie,
+    })
+    assert.equal(res.status, 200)
+    const gone = await raw(`/api/found-items/${item.id}`)
+    assert.equal(gone.status, 404)
+  })
+
+  it('30. students still cannot edit or delete another student report', async () => {
+    const owner = await register('Student Owner')
+    const intruder = await register('Student Intruder')
+    const admin = await ensureAdmin()
+
+    const lost = await createItem('lost', 'StudentProtectedLost', owner.cookie)
+    const found = await createItem('found', 'StudentProtectedFound', owner.cookie)
+
+    const editLost = await raw(`/api/lost-items/${lost.id}`, {
+      method: 'PUT',
+      cookie: intruder.cookie,
+      body: itemBody('lost', 'HijackedLost'),
+    })
+    assert.equal(editLost.status, 403)
+
+    const deleteFound = await raw(`/api/found-items/${found.id}`, {
+      method: 'DELETE',
+      cookie: intruder.cookie,
+    })
+    assert.equal(deleteFound.status, 403)
+
+    // Same reports are still editable by the admin.
+    const adminEdit = await raw(`/api/lost-items/${lost.id}`, {
+      method: 'PUT',
+      cookie: admin.cookie,
+      body: itemBody('lost', 'AdminStillEditsLost'),
+    })
+    assert.equal(adminEdit.status, 200)
   })
 })
 
@@ -388,8 +495,9 @@ describe('Phase 6 - Recovery requests', () => {
     assert.equal(rows.rows[0].claimant_user_id, account.user.id)
   })
 
-  it('22. Phase 5 status transitions still work with auth', async () => {
+it('22. status transitions still work, and only the admin can run them', async () => {
     const account = await register('Transition')
+    const admin = await ensureAdmin()
     const lost = await createItem('lost', 'TransLost', account.cookie)
     const found = await createItem('found', 'TransFound', account.cookie)
     const created = await raw('/api/recovery-requests', {
@@ -407,17 +515,31 @@ describe('Phase 6 - Recovery requests', () => {
     assert.equal(created.status, 201)
     createdRequestIds.push(created.data.request.id)
 
-    const approved = await raw(`/api/recovery-requests/${created.data.request.id}/status`, {
+    const studentApproved = await raw(`/api/recovery-requests/${created.data.request.id}/status`, {
       method: 'PATCH',
       cookie: account.cookie,
+      body: { status: 'approved' },
+    })
+    assert.equal(studentApproved.status, 403)
+
+    const approved = await raw(`/api/recovery-requests/${created.data.request.id}/status`, {
+      method: 'PATCH',
+      cookie: admin.cookie,
       body: { status: 'approved' },
     })
     assert.equal(approved.status, 200)
     assert.equal(approved.data.request.status, 'approved')
 
-    const recovered = await raw(`/api/recovery-requests/${created.data.request.id}/status`, {
+    const studentRecovered = await raw(`/api/recovery-requests/${created.data.request.id}/status`, {
       method: 'PATCH',
       cookie: account.cookie,
+      body: { status: 'recovered' },
+    })
+    assert.equal(studentRecovered.status, 403)
+
+    const recovered = await raw(`/api/recovery-requests/${created.data.request.id}/status`, {
+      method: 'PATCH',
+      cookie: admin.cookie,
       body: { status: 'recovered' },
     })
     assert.equal(recovered.status, 200)
@@ -425,7 +547,7 @@ describe('Phase 6 - Recovery requests', () => {
 
     const again = await raw(`/api/recovery-requests/${created.data.request.id}/status`, {
       method: 'PATCH',
-      cookie: account.cookie,
+      cookie: admin.cookie,
       body: { status: 'approved' },
     })
     assert.equal(again.status, 400)

@@ -3,6 +3,9 @@ const { ensureSchema } = require('./config/schema')
 
 const DEMO_CONTACT = 'Campus Lost & Found Office'
 
+const REMOVE_V20260903_DEMO = true
+const INSTALL_V20260903_DEMO = false
+
 const DEMO_LOST_ITEMS = [
   {
     itemName: 'Black Leather Wallet',
@@ -88,6 +91,31 @@ async function removeKnownTestRecords() {
   return result.rowCount
 }
 
+async function removeV20260903DemoRecord(table, dateColumn, record) {
+  const dateValue = record[dateColumn === 'date_lost' ? 'dateLost' : 'dateFound']
+  const result = await pool.query(
+    `DELETE FROM ${table}
+     WHERE item_name = $1
+       AND category = $2
+       AND location = $3
+       AND ${dateColumn} = $4
+       AND user_id IS NULL`,
+    [record.itemName, record.category, record.location, dateValue]
+  )
+  return result.rowCount
+}
+
+async function removeV20260903DemoRecords() {
+  let totalRemoved = 0
+  for (const record of DEMO_LOST_ITEMS) {
+    totalRemoved += await removeV20260903DemoRecord('lost_items', 'date_lost', record)
+  }
+  for (const record of DEMO_FOUND_ITEMS) {
+    totalRemoved += await removeV20260903DemoRecord('found_items', 'date_found', record)
+  }
+  return totalRemoved
+}
+
 async function demoRecordExists(table, dateColumn, record) {
   const dateValue = record[dateColumn === 'date_lost' ? 'dateLost' : 'dateFound']
   const result = await pool.query(
@@ -123,28 +151,41 @@ async function runSeed() {
     console.log(`Removed ${removed} known test record(s) from lost_items.`)
   }
 
-  let lostInserted = 0
-  for (const record of DEMO_LOST_ITEMS) {
-    const exists = await demoRecordExists('lost_items', 'date_lost', record)
-    if (exists) continue
-    await insertDemoRecord('lost_items', 'date_lost', record)
-    lostInserted += 1
+  let legacyRemoved = 0
+  if (REMOVE_V20260903_DEMO) {
+    legacyRemoved = await removeV20260903DemoRecords()
+    if (legacyRemoved > 0) {
+      console.log(
+        `Removed ${legacyRemoved} legacy campusfind:seed:v20260903 demo record(s).`
+      )
+    }
   }
 
+  let lostInserted = 0
   let foundInserted = 0
-  for (const record of DEMO_FOUND_ITEMS) {
-    const exists = await demoRecordExists('found_items', 'date_found', record)
-    if (exists) continue
-    await insertDemoRecord('found_items', 'date_found', record)
-    foundInserted += 1
+  if (INSTALL_V20260903_DEMO) {
+    for (const record of DEMO_LOST_ITEMS) {
+      const exists = await demoRecordExists('lost_items', 'date_lost', record)
+      if (exists) continue
+      await insertDemoRecord('lost_items', 'date_lost', record)
+      lostInserted += 1
+    }
+
+    for (const record of DEMO_FOUND_ITEMS) {
+      const exists = await demoRecordExists('found_items', 'date_found', record)
+      if (exists) continue
+      await insertDemoRecord('found_items', 'date_found', record)
+      foundInserted += 1
+    }
   }
 
   console.log(
-    `Seed complete. Lost demo records inserted: ${lostInserted}, Found demo records inserted: ${foundInserted}.`
+    `Seed complete. Legacy demo records removed: ${legacyRemoved}, Lost demo records inserted: ${lostInserted}, Found demo records inserted: ${foundInserted}.`
   )
 
   return {
     removed,
+    legacyRemoved,
     lostInserted,
     foundInserted,
   }

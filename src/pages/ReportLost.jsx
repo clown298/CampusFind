@@ -6,6 +6,7 @@ import PageShell from "../components/PageShell";
 import Button from "../components/Button";
 import TypeChip from "../components/TypeChip";
 import { LostIcon } from "../components/icons";
+import { MAX_IMAGE_LABEL, prepareImageFile } from "../utils/images";
 
 const CATEGORIES = [
   "Electronics",
@@ -16,25 +17,8 @@ const CATEGORIES = [
   "Other",
 ];
 
-const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const ALLOWED_IMAGE_EXT = /\.(jpe?g|png|webp)$/i;
-const MAX_IMAGE_BYTES = 500 * 1024;
-
 const required = (value) =>
   value && typeof value === "string" ? value.trim().length > 0 : false;
-
-function validateImageFile(file) {
-  if (!file) return null;
-  const nameOk = ALLOWED_IMAGE_EXT.test(file.name || "");
-  const typeOk = !file.type || ALLOWED_IMAGE_TYPES.includes(file.type);
-  if (!nameOk && !typeOk) {
-    return "Only JPEG, PNG, and WebP images are allowed.";
-  }
-  if (file.size > MAX_IMAGE_BYTES) {
-    return "Image must be smaller than 500 KB.";
-  }
-  return null;
-}
 
 function validateForm(data) {
   const errors = {};
@@ -121,6 +105,7 @@ function ReportLost() {
   const [success, setSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPreparingImage, setIsPreparingImage] = useState(false);
   const [isDraggingImage, setIsDraggingImage] = useState(false);
 
   function handleChange(e) {
@@ -143,30 +128,30 @@ function ReportLost() {
     setSubmissionError("");
   }
 
-  function acceptImage(file) {
+  async function acceptImage(file) {
     if (!file) return;
 
-    const validationError = validateImageFile(file);
-    if (validationError) {
-      setErrors((prev) => ({ ...prev, image: validationError }));
+    setIsPreparingImage(true);
+    try {
+      // Large phone photos are resized and compressed before upload.
+      const imageData = await prepareImageFile(file);
+
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next.image;
+        return next;
+      });
+      setFormData((prev) => ({ ...prev, imageData }));
+    } catch (error) {
       setFormData((prev) => ({ ...prev, imageData: undefined }));
-      return;
+      setErrors((prev) => ({
+        ...prev,
+        image:
+          (error && error.message) || "Could not read the image file.",
+      }));
+    } finally {
+      setIsPreparingImage(false);
     }
-
-    setErrors((prev) => {
-      const next = { ...prev };
-      delete next.image;
-      return next;
-    });
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      setFormData((prev) => ({ ...prev, imageData: String(reader.result || "") }));
-    };
-    reader.onerror = () => {
-      setErrors((prev) => ({ ...prev, image: "Could not read the image file." }));
-    };
-    reader.readAsDataURL(file);
   }
 
   function handleImageChange(e) {
@@ -197,7 +182,7 @@ function ReportLost() {
   async function handleSubmit(e) {
     e.preventDefault();
 
-    if (isSubmitting || isLoading) {
+    if (isSubmitting || isLoading || isPreparingImage) {
       return;
     }
 
@@ -695,13 +680,20 @@ function ReportLost() {
                           <polyline points="21 15 16 10 5 21" />
                         </svg>
                         <div>
-                          <p className={`text-sm font-semibold ${errors.image ? "text-lost" : "text-ink"}`}>
+                          <p
+                            className={`text-sm font-semibold ${
+                              errors.image ? "text-lost" : isPreparingImage ? "text-mute" : "text-ink"
+                            }`}
+                          >
                             {errors.image
                               ? errors.image
-                              : "Drag and drop an image, or click to choose"}
+                              : isPreparingImage
+                                ? "Preparing your photo…"
+                                : "Drag and drop an image, or click to choose"}
                           </p>
                           <p className="mt-1 text-xs text-mute">
-                            JPEG, PNG, or WebP. Maximum 500 KB.
+                            JPEG, PNG, or WebP. Maximum {MAX_IMAGE_LABEL}. Larger
+                            photos are resized automatically.
                           </p>
                         </div>
                       </label>

@@ -12,6 +12,7 @@ import ItemImage from "../components/ItemImage";
 import Reveal from "../components/Reveal";
 import { LostIcon, FoundIcon, PinIcon, CalendarIcon } from "../components/icons";
 import { formatDisplayDate, getItemName, getItemDate } from "../utils/items";
+import { MAX_IMAGE_LABEL, prepareImageFile } from "../utils/images";
 
 const CATEGORIES = [
   "Electronics",
@@ -22,25 +23,8 @@ const CATEGORIES = [
   "Other",
 ];
 
-const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const ALLOWED_IMAGE_EXT = /\.(jpe?g|png|webp)$/i;
-const MAX_IMAGE_BYTES = 500 * 1024;
-
 const required = (value) =>
   value && typeof value === "string" ? value.trim().length > 0 : false;
-
-function validateImageFile(file) {
-  if (!file) return null;
-  const nameOk = ALLOWED_IMAGE_EXT.test(file.name || "");
-  const typeOk = !file.type || ALLOWED_IMAGE_TYPES.includes(file.type);
-  if (!nameOk && !typeOk) {
-    return "Only JPEG, PNG, and WebP images are allowed.";
-  }
-  if (file.size > MAX_IMAGE_BYTES) {
-    return "Image must be smaller than 500 KB.";
-  }
-  return null;
-}
 
 function toDateInputValue(rawDate) {
   if (!rawDate) return "";
@@ -133,7 +117,7 @@ function ItemDetails({ type }) {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const { user } = useContext(AuthContext);
+  const { user, isAdmin } = useContext(AuthContext);
 
   const lostCtx = useContext(LostItemContext);
   const foundCtx = useContext(FoundItemContext);
@@ -172,34 +156,31 @@ function ItemDetails({ type }) {
   );
   const [contact, setContact] = useState(item?.contact || "");
   const [imageData, setImageData] = useState(item?.imageData || undefined);
+  const [isPreparingImage, setIsPreparingImage] = useState(false);
 
-  function handleImageChange(e) {
+  async function handleImageChange(e) {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
 
-    const validationError = validateImageFile(file);
-    if (validationError) {
-      setErrors((prev) => ({ ...prev, image: validationError }));
+    setIsPreparingImage(true);
+    try {
+      // Large phone photos are resized and compressed before upload.
+      setImageData(await prepareImageFile(file));
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next.image;
+        return next;
+      });
+    } catch (error) {
       setImageData(undefined);
+      setErrors((prev) => ({
+        ...prev,
+        image: (error && error.message) || "Could not read the image file.",
+      }));
+    } finally {
+      setIsPreparingImage(false);
       if (e.target) e.target.value = "";
-      return;
     }
-
-    setErrors((prev) => {
-      const next = { ...prev };
-      delete next.image;
-      return next;
-    });
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      setImageData(String(reader.result || ""));
-    };
-    reader.onerror = () => {
-      setErrors((prev) => ({ ...prev, image: "Could not read the image file." }));
-    };
-    reader.readAsDataURL(file);
-    if (e.target) e.target.value = "";
   }
 
   function handleClearImage(e) {
@@ -350,9 +331,12 @@ function ItemDetails({ type }) {
 
   const displayName = getItemName(item);
   const displayDate = formatDisplayDate(getItemDate(item, type));
-  const canManage = Boolean(
+  const isOwner = Boolean(
     user && item.userId && String(item.userId) === String(user.id)
   );
+  // Owners manage their own report; the campus admin can moderate any report.
+  const canManage = isOwner || isAdmin;
+  const adminModerating = isAdmin && !isOwner;
 
   function scrollToMatches() {
     const target = document.getElementById("possible-matches");
@@ -658,11 +642,20 @@ function ItemDetails({ type }) {
                       <polyline points="21 15 16 10 5 21" />
                     </svg>
                     <div>
-                      <p className={`text-sm font-semibold ${errors.image ? "text-lost" : "text-ink"}`}>
-                        {errors.image ? errors.image : "Click to choose a photo"}
+                      <p
+                        className={`text-sm font-semibold ${
+                          errors.image ? "text-lost" : isPreparingImage ? "text-mute" : "text-ink"
+                        }`}
+                      >
+                        {errors.image
+                          ? errors.image
+                          : isPreparingImage
+                            ? "Preparing your photo…"
+                            : "Click to choose a photo"}
                       </p>
                       <p className="mt-1 text-xs text-mute">
-                        JPEG, PNG, or WebP. Maximum 500 KB.
+                        JPEG, PNG, or WebP. Maximum {MAX_IMAGE_LABEL}. Larger
+                        photos are resized automatically.
                       </p>
                     </div>
                   </label>
@@ -881,6 +874,12 @@ function ItemDetails({ type }) {
                         >
                           Delete
                         </Button>
+                        {adminModerating ? (
+                          <p className="w-full text-sm leading-6 text-mute sm:w-auto">
+                            Admin moderation: this report belongs to another
+                            student.
+                          </p>
+                        ) : null}
                       </div>
                     ) : null}
                     <Button

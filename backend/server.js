@@ -1,5 +1,4 @@
 const helmet = require('helmet')
-const path = require('path')
 const express = require('express')
 const cors = require('cors')
 const morgan = require('morgan')
@@ -8,6 +7,7 @@ const jwt = require('jsonwebtoken')
 const rateLimit = require('express-rate-limit')
 const pool = require('./config/db')
 const { ensureSchema } = require('./config/schema')
+const { isAdminUser } = require('./config/roles')
 
 const app = express()
 
@@ -19,7 +19,9 @@ app.use(
     credentials: true,
   })
 )
-app.use(express.json({ limit: '5mb' }))
+// Item photos are sent as base64 data URLs and may be up to 5 MB of image
+// data, which is roughly 7 MB once base64-encoded.
+app.use(express.json({ limit: '16mb' }))
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -113,6 +115,7 @@ function toSafeUser(row) {
     name: row.name,
     email: row.email,
     createdAt: row.created_at,
+    isAdmin: isAdminUser(row),
   }
 }
 
@@ -156,6 +159,24 @@ async function requireAuth(req, res, next) {
     console.error('Authentication error:', error.message)
     res.status(500).json({ message: 'Authentication check failed.' })
   }
+}
+
+// Recovery decisions (approve / reject / mark recovered) belong to the single
+// admin account only. Students keep read access to their own requests.
+function requireAdmin(req, res, next) {
+  if (!isAdminUser(req.user)) {
+    return res.status(403).json({
+      message: 'Only the campus admin can review recovery requests.',
+    })
+  }
+  next()
+}
+
+// Students may only edit/delete their own reports; the single admin account
+// can moderate any Lost or Found report.
+function canManageItem(reqUser, ownerId) {
+  if (isAdminUser(reqUser)) return true
+  return Boolean(ownerId) && reqUser.id === ownerId
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -309,6 +330,32 @@ const ITEM_CATEGORY_MAX = 50
 const ITEM_LOCATION_MAX = 150
 const ITEM_CONTACT_MAX = 100
 
+// Images arrive as base64 data URLs. Base64 grows binary data by about 4/3,
+// so the accepted string length is derived from the byte limit.
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+const MAX_IMAGE_DATA_LENGTH = Math.ceil((MAX_IMAGE_BYTES * 4) / 3) + 1024
+const MAX_PROOF_IMAGE_BYTES = 2 * 1024 * 1024
+const MAX_PROOF_IMAGE_LENGTH = Math.ceil((MAX_PROOF_IMAGE_BYTES * 4) / 3) + 1024
+const ALLOWED_IMAGE_DATA_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=\s]+$/
+
+function imageSizeLabel(bytes) {
+  return `${Math.round(bytes / (1024 * 1024))} MB`
+}
+
+// Returns an error message, or null when the image data is acceptable.
+function validateImageData(value, { maxBytes, maxLength, fieldName }) {
+  if (typeof value !== 'string') {
+    return `${fieldName} must be an image data URL.`
+  }
+  if (!ALLOWED_IMAGE_DATA_RE.test(value.trim())) {
+    return `${fieldName} must be a JPEG, PNG or WebP image.`
+  }
+  if (value.length > maxLength) {
+    return `${fieldName} is too large. Maximum size is ${imageSizeLabel(maxBytes)}.`
+  }
+  return null
+}
+
 function validateItem(body, dateField) {
   const errors = {}
 
@@ -347,8 +394,13 @@ function validateItem(body, dateField) {
   }
 
   if (body.imageData !== undefined && body.imageData !== null && body.imageData !== '') {
-    if (typeof body.imageData !== 'string') {
-      errors.imageData = 'Image data must be a string.'
+    const imageError = validateImageData(body.imageData, {
+      maxBytes: MAX_IMAGE_BYTES,
+      maxLength: MAX_IMAGE_DATA_LENGTH,
+      fieldName: 'Image',
+    })
+    if (imageError) {
+      errors.imageData = imageError
     }
   }
 
@@ -419,7 +471,6 @@ function toRecoveryRequest(row) {
 }
 
 const MAX_PROOF_IMAGES = 4
-const MAX_PROOF_IMAGE_LENGTH = 900000
 
 function validateRecoveryRequest(body) {
   const errors = {}
@@ -468,16 +519,16 @@ function validateRecoveryRequest(body) {
     } else if (body.proofImages.length > MAX_PROOF_IMAGES) {
       errors.proofImages = `You can attach up to ${MAX_PROOF_IMAGES} proof images.`
     } else {
-      let badIndex = -1
       for (let i = 0; i < body.proofImages.length; i += 1) {
-        const image = body.proofImages[i]
-        if (typeof image !== 'string' || image.length > MAX_PROOF_IMAGE_LENGTH) {
-          badIndex = i
+        const imageError = validateImageData(body.proofImages[i], {
+          maxBytes: MAX_PROOF_IMAGE_BYTES,
+          maxLength: MAX_PROOF_IMAGE_LENGTH,
+          fieldName: `Proof image ${i + 1}`,
+        })
+        if (imageError) {
+          errors.proofImages = imageError
           break
         }
-      }
-      if (badIndex !== -1) {
-        errors.proofImages = `Proof image at position ${badIndex + 1} is too large. Keep each image under 500 KB.`
       }
     }
   }
@@ -487,14 +538,11 @@ function validateRecoveryRequest(body) {
 
 function canViewRecoveryRequest(reqUser, row) {
   if (!row) return false
+  // The admin reviews every request; students only their own.
+  if (isAdminUser(reqUser)) return true
   return (
     reqUser.id === row.claimant_user_id || reqUser.id === row.lost_owner_id
   )
-}
-
-function isRecoveryRequestOwner(reqUser, row) {
-  if (!row) return false
-  return Boolean(row.lost_owner_id) && reqUser.id === row.lost_owner_id
 }
 
 async function getRecoveryRequestById(id) {
@@ -595,7 +643,7 @@ app.put('/api/lost-items/:id', requireAuth, async (req, res) => {
     if (owner.rows.length === 0) {
       return res.status(404).json({ message: 'Lost item not found.' })
     }
-    if (owner.rows[0].user_id !== req.user.id) {
+    if (!canManageItem(req.user, owner.rows[0].user_id)) {
       return res.status(403).json({ message: 'You do not have permission to modify this report.' })
     }
 
@@ -632,7 +680,7 @@ app.delete('/api/lost-items/:id', requireAuth, async (req, res) => {
     if (owner.rows.length === 0) {
       return res.status(404).json({ message: 'Lost item not found.' })
     }
-    if (owner.rows[0].user_id !== req.user.id) {
+    if (!canManageItem(req.user, owner.rows[0].user_id)) {
       return res.status(403).json({ message: 'You do not have permission to modify this report.' })
     }
 
@@ -718,7 +766,7 @@ app.put('/api/found-items/:id', requireAuth, async (req, res) => {
     if (owner.rows.length === 0) {
       return res.status(404).json({ message: 'Found item not found.' })
     }
-    if (owner.rows[0].user_id !== req.user.id) {
+    if (!canManageItem(req.user, owner.rows[0].user_id)) {
       return res.status(403).json({ message: 'You do not have permission to modify this report.' })
     }
 
@@ -755,7 +803,7 @@ app.delete('/api/found-items/:id', requireAuth, async (req, res) => {
     if (owner.rows.length === 0) {
       return res.status(404).json({ message: 'Found item not found.' })
     }
-    if (owner.rows[0].user_id !== req.user.id) {
+    if (!canManageItem(req.user, owner.rows[0].user_id)) {
       return res.status(403).json({ message: 'You do not have permission to modify this report.' })
     }
 
@@ -774,12 +822,18 @@ app.delete('/api/found-items/:id', requireAuth, async (req, res) => {
 
 app.get('/api/recovery-requests', requireAuth, async (req, res) => {
   try {
-    const result = await pool.query(
-      `${RECOVERY_SELECT}
-       WHERE rr.claimant_user_id = $1 OR li.user_id = $1
-       ORDER BY rr.created_at DESC, rr.id DESC`,
-      [req.user.id]
-    )
+    // The admin sees the full review queue; everyone else only their own.
+    const result = isAdminUser(req.user)
+      ? await pool.query(
+          `${RECOVERY_SELECT}
+           ORDER BY rr.created_at DESC, rr.id DESC`
+        )
+      : await pool.query(
+          `${RECOVERY_SELECT}
+           WHERE rr.claimant_user_id = $1 OR li.user_id = $1
+           ORDER BY rr.created_at DESC, rr.id DESC`,
+          [req.user.id]
+        )
     res.json({ requests: result.rows.map(toRecoveryRequest) })
   } catch (error) {
     console.error('Error fetching recovery requests:', error.message)
@@ -872,51 +926,52 @@ app.post('/api/recovery-requests', requireAuth, async (req, res) => {
   }
 })
 
-app.patch('/api/recovery-requests/:id/status', requireAuth, async (req, res) => {
-  try {
-    const { id } = req.params
-    if (!Number.isInteger(Number(id)) || Number(id) <= 0) {
-      return res.status(400).json({ message: 'Invalid request ID.' })
-    }
+app.patch(
+  '/api/recovery-requests/:id/status',
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { id } = req.params
+      if (!Number.isInteger(Number(id)) || Number(id) <= 0) {
+        return res.status(400).json({ message: 'Invalid request ID.' })
+      }
 
-    const { status } = req.body || {}
-    if (typeof status !== 'string' || !RECOVERY_STATUSES.has(status)) {
-      return res.status(400).json({ message: 'Invalid recovery status.' })
-    }
+      const { status } = req.body || {}
+      if (typeof status !== 'string' || !RECOVERY_STATUSES.has(status)) {
+        return res.status(400).json({ message: 'Invalid recovery status.' })
+      }
 
-    const row = await getRecoveryRequestById(id)
-    if (!row) {
-      return res.status(404).json({ message: 'Recovery request not found.' })
-    }
+      const row = await getRecoveryRequestById(id)
+      if (!row) {
+        return res.status(404).json({ message: 'Recovery request not found.' })
+      }
 
-    if (!isRecoveryRequestOwner(req.user, row)) {
-      return res.status(403).json({ message: 'You do not have permission to update this request.' })
-    }
+      const allowed = RECOVERY_TRANSITIONS[row.status] || []
+      if (!allowed.includes(status)) {
+        return res.status(400).json({
+          message: `Recovery request status cannot change from "${row.status}" to "${status}".`,
+        })
+      }
 
-    const allowed = RECOVERY_TRANSITIONS[row.status] || []
-    if (!allowed.includes(status)) {
-      return res.status(400).json({
-        message: `Recovery request status cannot change from "${row.status}" to "${status}".`,
+      await pool.query(
+        `UPDATE recovery_requests
+         SET status = $1, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2`,
+        [status, id]
+      )
+
+      const updated = await getRecoveryRequestById(id)
+      res.json({
+        message: `Recovery request marked as "${status}".`,
+        request: toRecoveryRequest(updated),
       })
+    } catch (error) {
+      console.error('Error updating recovery request:', error.message)
+      res.status(500).json({ message: 'Failed to update recovery request' })
     }
-
-    await pool.query(
-      `UPDATE recovery_requests
-       SET status = $1, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $2`,
-      [status, id]
-    )
-
-    const updated = await getRecoveryRequestById(id)
-    res.json({
-      message: `Recovery request marked as "${status}".`,
-      request: toRecoveryRequest(updated),
-    })
-  } catch (error) {
-    console.error('Error updating recovery request:', error.message)
-    res.status(500).json({ message: 'Failed to update recovery request' })
   }
-})
+)
 
 // ---------------------------------------------------------------------------
 // My reports (authenticated user only)

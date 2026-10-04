@@ -123,9 +123,7 @@ function Register() {
       description="Government College of Engineering, Chandrapur"
       footer={footer}
     >
-      <h2 className="type-title text-2xl text-ink">
-        Create your account
-      </h2>
+      <h2 className="type-title text-2xl text-ink">Create your account</h2>
         <p className="mt-2 text-sm leading-6 text-mute">
           Join your campus lost &amp; found and keep track of your reports and
           recoveries.
@@ -201,7 +199,7 @@ function Register() {
           >
             {isSubmitting ? "Creating account…" : "Create account"}
           </Button>
-        </form>
+      </form>
     </AuthLayout>
   );
 }

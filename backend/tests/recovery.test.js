@@ -1,3 +1,8 @@
+process.env.NODE_ENV = 'test'
+// Point the single-admin rule at a throwaway account so the tests never touch
+// the real admin login. Production keeps the default admin email.
+process.env.ADMIN_EMAIL = 'campusfind.admin.test@campus.test'
+
 const { describe, it, before, after } = require('node:test')
 const assert = require('node:assert/strict')
 
@@ -10,18 +15,22 @@ let baseUrl
 let claimantCookie = null
 let ownerCookie = null
 let strangerCookie = null
+let finderCookie = null
+let adminCookie = null
 let claimantUserId = null
 let ownerUserId = null
 const createdItemIds = { lost: [], found: [] }
 const createdRequestIds = []
 const createdUserIds = []
 
-async function registerUser(name) {
-  const email = `${name.replace(/\s+/g, '')}_${Date.now()}_${Math.random().toString(16).slice(2)}@campus.test`
+async function registerUser(name, email) {
+  const address =
+    email ||
+    `${name.replace(/\s+/g, '')}_${Date.now()}_${Math.random().toString(16).slice(2)}@campus.test`
   const res = await fetch(`${baseUrl}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, email, password: 'password123' }),
+    body: JSON.stringify({ name, email: address, password: 'password123' }),
   })
   assert.equal(res.status, 201)
   const body = await res.json()
@@ -29,7 +38,7 @@ async function registerUser(name) {
   return { id: body.user.id, cookie: res.headers.get('set-cookie').split(';')[0] }
 }
 
-async function createTestPair(prefix) {
+async function createTestPair(prefix, finderId = null) {
   // The lost item belongs to the owner; the claimant is a separate user.
   const lost = await pool.query(
     `INSERT INTO lost_items (item_name, category, description, location, date_lost, contact, user_id)
@@ -37,9 +46,9 @@ async function createTestPair(prefix) {
     [`${prefix} Lost Wallet`, 'Accessories', 'Recovery API test item', 'Test Lab', 'Test Contact', ownerUserId]
   )
   const found = await pool.query(
-    `INSERT INTO found_items (item_name, category, description, location, date_found, contact)
-     VALUES ($1, $2, $3, $4, CURRENT_DATE - 1, $5) RETURNING id, item_name`,
-    [`${prefix} Found Wallet`, 'Accessories', 'Recovery API test item', 'Test Lab', 'Test Contact']
+    `INSERT INTO found_items (item_name, category, description, location, date_found, contact, user_id)
+     VALUES ($1, $2, $3, $4, CURRENT_DATE - 1, $5, $6) RETURNING id, item_name`,
+    [`${prefix} Found Wallet`, 'Accessories', 'Recovery API test item', 'Test Lab', 'Test Contact', finderId]
   )
   createdItemIds.lost.push(lost.rows[0].id)
   createdItemIds.found.push(found.rows[0].id)
@@ -83,6 +92,24 @@ async function createPendingRequest(prefix, overrides = {}) {
   return res.data.request
 }
 
+async function createPendingRequestWithFinder(prefix, finderId) {
+  const { lostId, foundId } = await createTestPair(prefix, finderId)
+  const res = await api('/api/recovery-requests', {
+    method: 'POST',
+    body: {
+      lostItemId: lostId,
+      foundItemId: foundId,
+      claimantName: 'Amit Student',
+      claimantEmail: 'amit@example.com',
+      claimantPhone: '9876543210',
+      claimantMessage: 'This black wallet is mine, it has a small coin pocket.',
+    },
+  })
+  assert.equal(res.status, 201)
+  createdRequestIds.push(res.data.request.id)
+  return res.data.request
+}
+
 before(async () => {
   await ensureSchema()
   server = app.listen(0)
@@ -99,6 +126,13 @@ before(async () => {
 
   const stranger = await registerUser('Recovery Stranger')
   strangerCookie = stranger.cookie
+
+  // The student who filed the Found report (the finder).
+  const finder = await registerUser('Recovery Finder')
+  finderCookie = finder.cookie
+
+  const admin = await registerUser('Recovery Admin', process.env.ADMIN_EMAIL)
+  adminCookie = admin.cookie
 })
 
 after(async () => {
@@ -315,26 +349,26 @@ describe('Recovery Requests API', () => {
     assert.equal(res.status, 403)
   })
 
-  it('13. the lost item owner approves a pending request', async () => {
+  it('13. the admin approves a pending request', async () => {
     const request = await createPendingRequest('ReqApprove')
     const res = await api(`/api/recovery-requests/${request.id}/status`, {
       method: 'PATCH',
       body: { status: 'approved' },
-    }, ownerCookie)
+    }, adminCookie)
     assert.equal(res.status, 200)
     assert.equal(res.data.request.status, 'approved')
   })
 
-  it('14. the owner can mark an approved request as recovered', async () => {
+  it('14. the admin marks an approved request as recovered', async () => {
     const request = await createPendingRequest('ReqRecovered')
     await api(`/api/recovery-requests/${request.id}/status`, {
       method: 'PATCH',
       body: { status: 'approved' },
-    }, ownerCookie)
+    }, adminCookie)
     const res = await api(`/api/recovery-requests/${request.id}/status`, {
       method: 'PATCH',
       body: { status: 'recovered' },
-    }, ownerCookie)
+    }, adminCookie)
     assert.equal(res.status, 200)
     assert.equal(res.data.request.status, 'recovered')
   })
@@ -344,12 +378,12 @@ describe('Recovery Requests API', () => {
     const rejected = await api(`/api/recovery-requests/${request.id}/status`, {
       method: 'PATCH',
       body: { status: 'rejected' },
-    }, ownerCookie)
+    }, adminCookie)
     assert.equal(rejected.status, 200)
     const res = await api(`/api/recovery-requests/${request.id}/status`, {
       method: 'PATCH',
       body: { status: 'recovered' },
-    }, ownerCookie)
+    }, adminCookie)
     assert.equal(res.status, 400)
     assert.match(res.data.message, /cannot change/)
   })
@@ -360,19 +394,196 @@ describe('Recovery Requests API', () => {
     const badStatus = await api(`/api/recovery-requests/${request.id}/status`, {
       method: 'PATCH',
       body: { status: 'not-a-status' },
-    }, ownerCookie)
+    }, adminCookie)
     assert.equal(badStatus.status, 400)
 
     const skippedMiddle = await api(`/api/recovery-requests/${request.id}/status`, {
       method: 'PATCH',
       body: { status: 'recovered' },
-    }, ownerCookie)
+    }, adminCookie)
     assert.equal(skippedMiddle.status, 400)
 
     const missing = await api('/api/recovery-requests/999999/status', {
       method: 'PATCH',
       body: { status: 'approved' },
-    }, ownerCookie)
+    }, adminCookie)
     assert.equal(missing.status, 404)
+  })
+
+  it('17. students get 403 for approve, reject and mark recovered', async () => {
+    const forApprove = await createPendingRequest('ReqStudentApprove')
+    for (const status of ['approved', 'rejected']) {
+      const res = await api(`/api/recovery-requests/${forApprove.id}/status`, {
+        method: 'PATCH',
+        body: { status },
+      }, ownerCookie)
+      assert.equal(res.status, 403)
+      assert.match(res.data.message, /admin/i)
+    }
+    // Still pending: the student's attempts changed nothing.
+    const claimantTry = await api(`/api/recovery-requests/${forApprove.id}/status`, {
+      method: 'PATCH',
+      body: { status: 'approved' },
+    }, claimantCookie)
+    assert.equal(claimantTry.status, 403)
+
+    const strangerTry = await api(`/api/recovery-requests/${forApprove.id}/status`, {
+      method: 'PATCH',
+      body: { status: 'rejected' },
+    }, strangerCookie)
+    assert.equal(strangerTry.status, 403)
+
+    await api(`/api/recovery-requests/${forApprove.id}/status`, {
+      method: 'PATCH',
+      body: { status: 'approved' },
+    }, adminCookie)
+    const stillApproved = await api(`/api/recovery-requests/${forApprove.id}/status`, {
+      method: 'PATCH',
+      body: { status: 'recovered' },
+    }, ownerCookie)
+    assert.equal(stillApproved.status, 403)
+
+    const view = await api(`/api/recovery-requests/${forApprove.id}`, {}, ownerCookie)
+    assert.equal(view.status, 200)
+    assert.equal(view.data.request.status, 'approved')
+  })
+
+  it('18. a student cannot reach admin endpoints without a session or as a student', async () => {
+    const request = await createPendingRequest('ReqStudentEndpoint')
+
+    const loggedOut = await api(`/api/recovery-requests/${request.id}/status`, {
+      method: 'PATCH',
+      body: { status: 'approved' },
+    }, null)
+    assert.equal(loggedOut.status, 401)
+
+    for (const status of ['approved', 'rejected', 'recovered']) {
+      const res = await api(`/api/recovery-requests/${request.id}/status`, {
+        method: 'PATCH',
+        body: { status },
+      }, claimantCookie)
+      assert.equal(res.status, 403)
+    }
+
+    const rows = await pool.query('SELECT status FROM recovery_requests WHERE id = $1', [
+      request.id,
+    ])
+    assert.equal(rows.rows[0].status, 'pending')
+  })
+
+  it('19. the admin sees every request, students only their own', async () => {
+    const request = await createPendingRequest('ReqAdminQueue')
+
+    const adminList = await api('/api/recovery-requests', {}, adminCookie)
+    assert.equal(adminList.status, 200)
+    assert.ok(
+      adminList.data.requests.some((r) => r.id === request.id),
+      'admin should see a request they are not part of'
+    )
+
+    const strangerList = await api('/api/recovery-requests', {}, strangerCookie)
+    assert.equal(strangerList.status, 200)
+    assert.ok(!strangerList.data.requests.some((r) => r.id === request.id))
+  })
+
+  it('20. the admin can open any request, a stranger still cannot', async () => {
+    const request = await createPendingRequest('ReqAdminDetail')
+
+    const adminView = await api(`/api/recovery-requests/${request.id}`, {}, adminCookie)
+    assert.equal(adminView.status, 200)
+    assert.equal(adminView.data.request.id, request.id)
+
+    const strangerView = await api(`/api/recovery-requests/${request.id}`, {}, strangerCookie)
+    assert.equal(strangerView.status, 403)
+  })
+
+  it('21. only the admin account is flagged as admin', async () => {
+    const admin = await api('/api/auth/me', {}, adminCookie)
+    assert.equal(admin.status, 200)
+    assert.equal(admin.data.user.email, process.env.ADMIN_EMAIL)
+    assert.equal(admin.data.user.isAdmin, true)
+
+    for (const cookie of [ownerCookie, claimantCookie, strangerCookie]) {
+      const res = await api('/api/auth/me', {}, cookie)
+      assert.equal(res.status, 200)
+      assert.equal(res.data.user.isAdmin, false)
+    }
+  })
+
+  it('22. the admin list keeps resolved requests (full history)', async () => {
+    const approved = await createPendingRequest('ReqHistoryApproved')
+    await api(`/api/recovery-requests/${approved.id}/status`, {
+      method: 'PATCH',
+      body: { status: 'approved' },
+    }, adminCookie)
+
+    const rejected = await createPendingRequest('ReqHistoryRejected')
+    await api(`/api/recovery-requests/${rejected.id}/status`, {
+      method: 'PATCH',
+      body: { status: 'rejected' },
+    }, adminCookie)
+
+    const recovered = await createPendingRequest('ReqHistoryRecovered')
+    await api(`/api/recovery-requests/${recovered.id}/status`, {
+      method: 'PATCH',
+      body: { status: 'approved' },
+    }, adminCookie)
+    await api(`/api/recovery-requests/${recovered.id}/status`, {
+      method: 'PATCH',
+      body: { status: 'recovered' },
+    }, adminCookie)
+
+    const res = await api('/api/recovery-requests', {}, adminCookie)
+    assert.equal(res.status, 200)
+    const byId = new Map(res.data.requests.map((r) => [r.id, r]))
+    assert.equal(byId.get(approved.id).status, 'approved')
+    assert.equal(byId.get(rejected.id).status, 'rejected')
+    assert.equal(byId.get(recovered.id).status, 'recovered')
+
+    const statuses = new Set(res.data.requests.map((r) => r.status))
+    assert.ok(statuses.has('pending'), 'admin history should keep pending items too')
+  })
+
+  it('23. the admin can list every Lost and Found report', async () => {
+    const lost = await api('/api/lost-items', {}, adminCookie)
+    const found = await api('/api/found-items', {}, adminCookie)
+    assert.equal(lost.status, 200)
+    assert.equal(found.status, 200)
+    assert.ok(lost.data.items.length > 0)
+    assert.ok(found.data.items.length > 0)
+    // Reports created by other students are visible to the admin.
+    assert.ok(lost.data.items.some((item) => item.userId === ownerUserId))
+  })
+
+  it('24. the student who filed the Found report cannot approve or reject', async () => {
+    const finder = await pool.query(
+      'SELECT id FROM users WHERE name = $1 ORDER BY id DESC LIMIT 1',
+      ['Recovery Finder']
+    )
+    const request = await createPendingRequestWithFinder(
+      'ReqFinder',
+      finder.rows[0].id
+    )
+
+    for (const status of ['approved', 'rejected', 'recovered']) {
+      const res = await api(`/api/recovery-requests/${request.id}/status`, {
+        method: 'PATCH',
+        body: { status },
+      }, finderCookie)
+      assert.equal(res.status, 403)
+      assert.match(res.data.message, /admin/i)
+    }
+
+    // The finder is not a party to the request, so it stays closed to them.
+    const view = await api(`/api/recovery-requests/${request.id}`, {}, finderCookie)
+    assert.equal(view.status, 403)
+
+    // Only the admin can move it forward.
+    const adminRes = await api(`/api/recovery-requests/${request.id}/status`, {
+      method: 'PATCH',
+      body: { status: 'approved' },
+    }, adminCookie)
+    assert.equal(adminRes.status, 200)
+    assert.equal(adminRes.data.request.status, 'approved')
   })
 })

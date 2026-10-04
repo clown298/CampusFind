@@ -6,6 +6,11 @@ import { findPossibleMatches } from "../utils/matching";
 import { formatDisplayDate, getItemDate, getItemName } from "../utils/items";
 import { RecoveryRequestContext } from "../context/RecoveryRequestContext";
 import { AuthContext } from "../context/AuthContext";
+import {
+  MAX_PROOF_IMAGE_BYTES,
+  MAX_PROOF_IMAGE_LABEL,
+  prepareImageFile,
+} from "../utils/images";
 
 const RECOVERY_STATUS_META = {
   pending: { label: "Pending", classes: "border-pending text-pending" },
@@ -15,32 +20,15 @@ const RECOVERY_STATUS_META = {
 };
 
 const RECOVERY_STATUS_NOTES = {
-  pending:
-    "A recovery request for this pair is pending approval.",
+  pending: "A recovery request for this pair is pending admin review.",
   approved:
     "Recovery request approved. The found item can now be returned.",
   rejected: "This recovery request was rejected.",
   recovered: "This recovery request was marked as recovered.",
 };
 
-const PROOF_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const PROOF_IMAGE_EXT = /\.(jpe?g|png|webp)$/i;
 const MAX_PROOF_IMAGES = 4;
-const MAX_PROOF_IMAGE_BYTES = 500 * 1024;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function validateProofImage(file) {
-  if (!file) return null;
-  const nameOk = PROOF_IMAGE_EXT.test(file.name || "");
-  const typeOk = !file.type || PROOF_IMAGE_TYPES.includes(file.type);
-  if (!nameOk && !typeOk) {
-    return "Only JPEG, PNG, and WebP images are allowed.";
-  }
-  if (file.size > MAX_PROOF_IMAGE_BYTES) {
-    return "Image must be smaller than 500 KB.";
-  }
-  return null;
-}
 
 function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
   const { createRecoveryRequest } = useContext(RecoveryRequestContext);
@@ -58,6 +46,7 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
+  const [isPreparingProof, setIsPreparingProof] = useState(false);
 
   function requestRecovery() {
     if (!isAuthenticated) {
@@ -110,23 +99,29 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
     return next;
   }
 
-  function addProofFile(file) {
+  async function addProofFile(file) {
     if (!file) return;
     if (proofImages.length >= MAX_PROOF_IMAGES) {
       setProofError(`You can add up to ${MAX_PROOF_IMAGES} proof images.`);
       return;
     }
-    const validationError = validateProofImage(file);
-    if (validationError) {
-      setProofError(validationError);
-      return;
+
+    setIsPreparingProof(true);
+    try {
+      // Big phone photos are resized before they are attached.
+      const dataUrl = await prepareImageFile(file, {
+        maxBytes: MAX_PROOF_IMAGE_BYTES,
+        label: MAX_PROOF_IMAGE_LABEL,
+      });
+      setProofError("");
+      setProofImages((prev) => [...prev, dataUrl]);
+    } catch (error) {
+      setProofError(
+        (error && error.message) || "Could not read the image file."
+      );
+    } finally {
+      setIsPreparingProof(false);
     }
-    setProofError("");
-    const reader = new FileReader();
-    reader.onload = () => {
-      setProofImages((prev) => [...prev, String(reader.result || "")]);
-    };
-    reader.readAsDataURL(file);
   }
 
   function handleProofInput(e) {
@@ -436,7 +431,7 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
                       <circle cx="8.5" cy="8.5" r="1.5" />
                       <polyline points="21 15 16 10 5 21" />
                     </svg>
-                    Upload Proof Image
+                    {isPreparingProof ? "Preparing image…" : "Upload Proof Image"}
                   </label>
                   <input
                     id={`recovery-proof-${lostItemId}-${foundItemId}`}
@@ -458,8 +453,9 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
                 </p>
               ) : null}
               <p className="mt-2 text-xs text-mute">
-                You can add up to {MAX_PROOF_IMAGES} images, each under 500 KB.
-                Proof images are only shown to the item owner and the claimant.
+                You can add up to {MAX_PROOF_IMAGES} images, each under{" "}
+                {MAX_PROOF_IMAGE_LABEL}. Proof images are only shown to the item
+                owner and the claimant.
               </p>
             </div>
           </div>
@@ -475,10 +471,14 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
             <Button
               type="submit"
               variant="found"
-              disabled={submitting}
+              disabled={submitting || isPreparingProof}
               className="w-full sm:w-auto"
             >
-              {submitting ? "Submitting…" : "Submit Request"}
+              {submitting
+                ? "Submitting…"
+                : isPreparingProof
+                  ? "Preparing image…"
+                  : "Submit Request"}
             </Button>
           </div>
         </form>
