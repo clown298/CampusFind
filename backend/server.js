@@ -104,6 +104,15 @@ const COOKIE_NAME = 'campusfind_token'
 const TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 const IS_PRODUCTION = process.env.NODE_ENV === 'production'
 
+// Render terminates TLS at a single reverse-proxy hop in front of the app, so
+// the client IP arrives in X-Forwarded-For with exactly one trusted hop. Trust
+// only that hop (a number, never `true`) so express-rate-limit keys each
+// client correctly without letting arbitrary clients spoof their address by
+// injecting extra X-Forwarded-For entries.
+if (IS_PRODUCTION) {
+  app.set('trust proxy', 1)
+}
+
 // SameSite=None requires Secure, which browsers reject on plain-HTTP local
 // development. Use Lax in development so the session cookie is actually kept.
 const COOKIE_OPTIONS = {

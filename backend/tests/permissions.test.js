@@ -524,3 +524,13 @@ describe('Temporary credentials and password change', () => {
     createdItemIds.push(res.data.item.id)
   })
 })
+
+describe('Proxy trust configuration', () => {
+  // The single production proxy hop (Render) is trusted so express-rate-limit
+  // keys each real client correctly. Outside production the app must not trust
+  // X-Forwarded-For, otherwise any client could spoof its address and evade the
+  // rate limiter.
+  it('does not trust forwarding headers outside production', () => {
+    assert.equal(app.get('trust proxy'), false)
+  })
+})
