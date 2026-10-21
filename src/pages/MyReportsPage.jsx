@@ -8,6 +8,7 @@ import PageShell from "../components/PageShell";
 import Button from "../components/Button";
 import ItemImage from "../components/ItemImage";
 import Reveal from "../components/Reveal";
+import LoadingState from "../components/LoadingState";
 import TypeChip from "../components/TypeChip";
 import StatusChip from "../components/StatusChip";
 import { CalendarIcon, FoundIcon, LostIcon, PinIcon, ReportIcon } from "../components/icons";
@@ -64,7 +65,7 @@ function MyReportItem({ kind, item, onDelete, onOpen }) {
 
   return (
     <article
-      className={`group min-w-0 rounded-card border border-line bg-surface transition-colors duration-200 ${
+      className={`group min-w-0 rounded-card border border-line bg-surface transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-sm hover:shadow-black/5 ${
         isFound ? "hover:border-found/40" : "hover:border-lost/40"
       }`}
     >
@@ -155,7 +156,7 @@ function MyReportItem({ kind, item, onDelete, onOpen }) {
           </p>
           {deleteError && (
             <p
-              className="mt-3 rounded-control border border-lost/30 bg-lost/10 p-3 text-sm font-medium text-lost"
+              className="animate-alert-in mt-3 rounded-control border border-lost/30 bg-lost/10 p-3 text-sm font-medium text-lost"
               role="alert"
             >
               {deleteError}
@@ -258,23 +259,16 @@ function MyReportsPage() {
     return "Open";
   }
 
-  const eyebrow = "GCOEC • Campus Lost & Found";
+  // eyebrow string removed — pages use badgeText prop on PageShell
 
   if (isLoading) {
     return (
       <PageShell
         title="My Reports"
         description="Track the lost and found items you have reported."
-        eyebrow={eyebrow}
+        badgeText="GCOEC Campus"
       >
-        <div
-          className="rounded-card border border-line bg-surface px-5 py-10 text-center sm:px-8"
-          role="status"
-        >
-          <p className="text-sm font-semibold text-mute">
-            Loading your reports…
-          </p>
-        </div>
+        <LoadingState label="Loading your reports…" />
       </PageShell>
     );
   }
@@ -284,7 +278,7 @@ function MyReportsPage() {
       <PageShell
         title="My Reports"
         description="Track the lost and found items you have reported."
-        eyebrow={eyebrow}
+        badgeText="GCOEC Campus"
       >
         <div
           className="rounded-card border border-lost/30 bg-lost/10 p-4 text-sm text-lost sm:p-5"
@@ -321,7 +315,7 @@ function MyReportsPage() {
     <PageShell
       title="My Reports"
       description="Track the lost and found items you have reported."
-      eyebrow={eyebrow}
+      badgeText="GCOEC Campus"
       icon={<TypeChip tone="neutral" icon={ReportIcon} label="Your reports" />}
       tone="neutral"
       action={
@@ -374,40 +368,51 @@ function MyReportsPage() {
         </div>
       ) : (
         <div className="space-y-10">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-card border border-line bg-surface p-4">
-              <p className="type-title text-3xl leading-none text-ink">
-                {totalCount}
-              </p>
-              <p className="mt-2 text-sm text-mute">Total reports</p>
-            </div>
-            <div className="rounded-card border border-line bg-surface p-4">
-              <p className="type-title text-3xl leading-none text-ink">
-                {openCount}
-              </p>
-              <p className="mt-2 flex items-center gap-1.5 text-sm text-mute">
-                <span className="h-1.5 w-1.5 rounded-full bg-mute" aria-hidden="true" />
-                Open
-              </p>
-            </div>
-            <div className="rounded-card border border-line bg-surface p-4">
-              <p className="type-title text-3xl leading-none text-ink">
-                {recoveryCount}
-              </p>
-              <p className="mt-2 flex items-center gap-1.5 text-sm text-mute">
-                <span className="h-1.5 w-1.5 rounded-full bg-pending" aria-hidden="true" />
-                In recovery
-              </p>
-            </div>
-            <div className="rounded-card border border-line bg-surface p-4">
-              <p className="type-title text-3xl leading-none text-ink">
-                {resolvedCount}
-              </p>
-              <p className="mt-2 flex items-center gap-1.5 text-sm text-mute">
-                <span className="h-1.5 w-1.5 rounded-full bg-canopy" aria-hidden="true" />
-                Resolved
-              </p>
-            </div>
+          <div className="overflow-hidden rounded-card border border-line bg-surface">
+            <dl className="grid grid-cols-2 divide-line sm:grid-cols-4 sm:divide-x">
+              <div className="p-5 sm:p-6">
+                <dd className="type-display text-4xl leading-none text-ink">
+                  {totalCount}
+                </dd>
+                <dt className="mt-2.5 text-sm font-medium text-mute">
+                  Total reports
+                </dt>
+              </div>
+              <div className="border-t border-line p-5 sm:border-t-0 sm:p-6">
+                <dd className="type-display flex items-baseline gap-2 text-4xl leading-none text-ink">
+                  {openCount}
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full bg-mute"
+                    aria-hidden="true"
+                  />
+                </dd>
+                <dt className="mt-2.5 text-sm font-medium text-mute">Open</dt>
+              </div>
+              <div className="border-t border-line p-5 sm:border-t-0 sm:p-6">
+                <dd className="type-display flex items-baseline gap-2 text-4xl leading-none text-ink">
+                  {recoveryCount}
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full bg-pending"
+                    aria-hidden="true"
+                  />
+                </dd>
+                <dt className="mt-2.5 text-sm font-medium text-mute">
+                  In recovery
+                </dt>
+              </div>
+              <div className="border-t border-line p-5 sm:border-t-0 sm:p-6">
+                <dd className="type-display flex items-baseline gap-2 text-4xl leading-none text-ink">
+                  {resolvedCount}
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full bg-canopy"
+                    aria-hidden="true"
+                  />
+                </dd>
+                <dt className="mt-2.5 text-sm font-medium text-mute">
+                  Resolved
+                </dt>
+              </div>
+            </dl>
           </div>
 
           {lostItems.length > 0 ? (
@@ -416,24 +421,26 @@ function MyReportsPage() {
                 <LostIcon size={20} className="text-lost" />
                 Lost Reports
               </h2>
-              <p className="mt-2 text-sm leading-6 text-mute">
+              <span
+                className="mt-3 block h-1 w-12 rounded-full bg-lost"
+                aria-hidden="true"
+              />
+              <p className="mt-2.5 text-sm leading-6 text-mute">
                 {lostItems.length} report{lostItems.length === 1 ? "" : "s"} you
                 have filed as lost.
               </p>
-              <Reveal className="min-w-0">
-                <ul className="mt-5 space-y-3">
-                  {lostItems.map((item) => (
-                    <li key={item.id} className="min-w-0">
+              <ul className="mt-5 space-y-3">
+                  {lostItems.map((item, index) => (
+                    <Reveal as="li" key={item.id} delay={Math.min(index, 5) * 50} className="min-w-0">
                       <MyReportItem
                         kind="lost"
                         item={item}
                         onDelete={handleDelete}
                         onOpen={itemOpenStatus("lost", item)}
                       />
-                    </li>
+                    </Reveal>
                   ))}
                 </ul>
-              </Reveal>
             </section>
           ) : null}
 
@@ -443,24 +450,26 @@ function MyReportsPage() {
                 <FoundIcon size={20} className="text-found" />
                 Found Reports
               </h2>
-              <p className="mt-2 text-sm leading-6 text-mute">
+              <span
+                className="mt-3 block h-1 w-12 rounded-full bg-found"
+                aria-hidden="true"
+              />
+              <p className="mt-2.5 text-sm leading-6 text-mute">
                 {foundItems.length} report{foundItems.length === 1 ? "" : "s"} you
                 have filed as found.
               </p>
-              <Reveal className="min-w-0">
-                <ul className="mt-5 space-y-3">
-                  {foundItems.map((item) => (
-                    <li key={item.id} className="min-w-0">
+              <ul className="mt-5 space-y-3">
+                  {foundItems.map((item, index) => (
+                    <Reveal as="li" key={item.id} delay={Math.min(index, 5) * 50} className="min-w-0">
                       <MyReportItem
                         kind="found"
                         item={item}
                         onDelete={handleDelete}
                         onOpen={itemOpenStatus("found", item)}
                       />
-                    </li>
+                    </Reveal>
                   ))}
                 </ul>
-              </Reveal>
             </section>
           ) : null}
         </div>

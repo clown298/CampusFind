@@ -5,6 +5,7 @@ import { RecoveryRequestContext } from "../context/RecoveryRequestContext";
 import PageShell from "../components/PageShell";
 import Button from "../components/Button";
 import EmptyState from "../components/EmptyState";
+import LoadingState from "../components/LoadingState";
 import Reveal from "../components/Reveal";
 import StatusChip from "../components/StatusChip";
 import TypeChip from "../components/TypeChip";
@@ -78,7 +79,7 @@ function ItemLink({ type, item }) {
       </p>
       <Link
         to={path}
-        className="type-card mt-1 inline-block break-words text-lg text-ink no-underline transition-colors duration-200 hover:underline underline-offset-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface rounded-card -m-1 p-1"
+        className="type-card -m-1 mt-1 inline-block break-words rounded-card p-1 text-lg text-primary underline decoration-primary/30 underline-offset-4 transition-colors duration-200 hover:text-primary-hover hover:decoration-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
       >
         {item.itemName}
       </Link>
@@ -192,7 +193,7 @@ function RequestActions({ request }) {
           {busy === "rejected" ? "Rejecting…" : "Reject"}
         </Button>
         {actionError ? (
-          <p className="w-full text-sm font-medium text-lost" role="alert">
+          <p className="animate-alert-in w-full text-sm font-medium text-lost" role="alert">
             {actionError}
           </p>
         ) : null}
@@ -212,7 +213,7 @@ function RequestActions({ request }) {
           {busy === "recovered" ? "Marking…" : "Mark as Recovered"}
         </Button>
         {actionError ? (
-          <p className="w-full text-sm font-medium text-lost" role="alert">
+          <p className="animate-alert-in w-full text-sm font-medium text-lost" role="alert">
             {actionError}
           </p>
         ) : null}
@@ -224,13 +225,21 @@ function RequestActions({ request }) {
 }
 
 function RecoveryRequestsPage() {
-  const { user, isAuthenticated, isAdmin, loading: authLoading } =
+  const { isAuthenticated, isAdmin, loading: authLoading } =
     useContext(AuthContext);
   const { recoveryRequests, isLoading, loadError, refreshRequests } =
     useContext(RecoveryRequestContext);
   const location = useLocation();
 
   const [statusFilter, setStatusFilter] = useState("all");
+
+  async function handleRetry() {
+    try {
+      await refreshRequests();
+    } catch {
+      // The context stores the error message for display.
+    }
+  }
 
   useEffect(() => {
     if (isAuthenticated && loadError && refreshRequests) {
@@ -283,16 +292,9 @@ function RecoveryRequestsPage() {
       <PageShell
         title="Recovery Requests"
         description="Review requests related to items you can recover or return."
-        eyebrow="GCOEC • Campus Lost & Found"
+        badgeText="GCOEC Campus"
       >
-        <div
-          className="rounded-card border border-line bg-surface px-5 py-10 text-center sm:px-8"
-          role="status"
-        >
-          <p className="text-sm font-semibold text-mute">
-            Checking your session…
-          </p>
-        </div>
+        <LoadingState label="Checking your session…" />
       </PageShell>
     );
   }
@@ -302,7 +304,7 @@ function RecoveryRequestsPage() {
       <PageShell
         title="Recovery Requests"
         description="Review requests related to items you can recover or return."
-        eyebrow="GCOEC • Campus Lost & Found"
+        badgeText="GCOEC Campus"
       >
         <div className="mx-auto w-full max-w-2xl">
           <div className="rounded-card border border-line bg-surface p-5 text-center sm:p-8">
@@ -353,7 +355,7 @@ function RecoveryRequestsPage() {
     <PageShell
       title="Recovery Requests"
       description={description}
-      eyebrow="GCOEC • Campus Lost & Found"
+      badgeText="GCOEC Campus"
       icon={
         <TypeChip
           tone="recovered"
@@ -362,26 +364,49 @@ function RecoveryRequestsPage() {
         />
       }
       tone="recovered"
-      meta={`${recoveryRequests.length} ${countLabel}`}
+      meta={
+        loadError && recoveryRequests.length === 0
+          ? undefined
+          : `${recoveryRequests.length} ${countLabel}`
+      }
     >
-      {loadError && (
+      {loadError && recoveryRequests.length > 0 ? (
         <div
           className="mb-4 rounded-card border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
           role="alert"
         >
-          <p className="font-semibold">Recovery requests unavailable</p>
+          <p className="font-semibold">Could not refresh recovery requests</p>
           <p className="mt-1">{loadError}</p>
+          <Button
+            variant="secondary"
+            onClick={handleRetry}
+            className="mt-3"
+          >
+            Try again
+          </Button>
         </div>
-      )}
+      ) : null}
 
       {isLoading ? (
+        <LoadingState label="Loading recovery requests…" />
+      ) : loadError && recoveryRequests.length === 0 ? (
         <div
-          className="rounded-card border border-line bg-surface px-5 py-10 text-center sm:px-8"
-          role="status"
+          className="rounded-card border border-lost/30 bg-lost/5 p-6 text-center sm:p-8"
+          role="alert"
         >
-          <p className="text-sm font-semibold text-mute">
-            Loading recovery requests…
+          <h2 className="type-section text-xl text-ink sm:text-2xl">
+            Recovery requests unavailable
+          </h2>
+          <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-mute">
+            {loadError}
           </p>
+          <Button
+            variant="secondary"
+            onClick={handleRetry}
+            className="mt-5"
+          >
+            Try again
+          </Button>
         </div>
       ) : recoveryRequests.length === 0 ? (
         <EmptyState
@@ -397,7 +422,7 @@ function RecoveryRequestsPage() {
           <div
             role="group"
             aria-label="Filter by status"
-            className="mb-6 flex flex-wrap gap-2"
+            className="mb-6 flex flex-wrap gap-2 rounded-card border border-line bg-paper p-3"
           >
             {[
               { key: "all", label: "All" },
@@ -436,11 +461,6 @@ function RecoveryRequestsPage() {
           <div className="space-y-5">
             {visibleRequests.map((request) => {
               const meta = STATUS_META[request.status] || STATUS_META.pending;
-              const isClaimant = Boolean(
-                user &&
-                  request.claimantUserId &&
-                  String(request.claimantUserId) === String(user.id)
-              );
               // Students only follow the status; the admin reviews it.
               const statusLabel =
                 request.status === "pending" && !isAdmin
@@ -450,7 +470,7 @@ function RecoveryRequestsPage() {
                 <Reveal
                   as="article"
                   key={request.id}
-                  className={`rounded-card border border-line border-l-4 bg-surface p-5 sm:p-6 transition-colors duration-200 ${meta.accent}`}
+                  className="rounded-card border border-line bg-surface p-5 transition-[border-color,box-shadow] duration-200 hover:border-line/90 shadow-sm"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <StatusChip
@@ -463,29 +483,27 @@ function RecoveryRequestsPage() {
                     </p>
                   </div>
 
-                  <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
+                  <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center sm:gap-5">
                     <ItemLink type="lost" item={request.lostItem} />
-                    <div className="hidden sm:block" aria-hidden="true">
-                      <p className="text-xs font-semibold text-mute">Direction</p>
-                      <p className="mt-2 flex items-center gap-1.5">
-                        <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-paper text-mute">
-                          <ArrowRightIcon size={16} />
-                        </span>
-                        <span className="text-sm text-mute">
-                          lost → found
-                        </span>
-                      </p>
+                    <div
+                      className="hidden sm:flex sm:flex-col sm:items-center"
+                      aria-hidden="true"
+                    >
+                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-paper text-mute">
+                        <ArrowRightIcon size={16} />
+                      </span>
+                      <span className="mt-1 text-xs text-mute">
+                        lost &rarr; found
+                      </span>
                     </div>
-                    <div className="flex items-center">
-                      <ItemLink type="found" item={request.foundItem} />
-                    </div>
+                    <ItemLink type="found" item={request.foundItem} />
                   </div>
 
-                  <div className="mt-5">
+                  <div className="mt-4">
                     <RequestProgress status={request.status} />
                   </div>
 
-                  <div className={`mt-5 rounded-card border p-4 ${meta.tint}`}>
+                  <div className={`mt-4 rounded-card border p-4 ${meta.tint}`}>
                     <p
                       className={`flex items-center gap-1.5 text-xs font-semibold ${
                         request.status === "rejected"
@@ -525,16 +543,16 @@ function RecoveryRequestsPage() {
                         <p className="text-xs font-semibold text-mute">
                           Proof images
                         </p>
-                        <ul className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        <ul className="mt-2 flex flex-wrap gap-3">
                           {request.proofImages.map((image, index) => (
                             <li
                               key={index}
-                              className="overflow-hidden rounded-card border border-line bg-surface"
+                              className="h-32 w-48 overflow-hidden rounded-card border border-line bg-surface"
                             >
                               <img
                                 src={image}
                                 alt={`Proof of ownership ${index + 1}`}
-                                className="h-28 w-full object-contain bg-paper"
+                                className="h-full w-full object-contain bg-paper"
                               />
                             </li>
                           ))}
@@ -544,7 +562,7 @@ function RecoveryRequestsPage() {
                   </div>
 
                   <div
-                    className={`mt-4 rounded-card border p-4 ${
+                    className={`mt-4 rounded-card border px-4 py-3 ${
                       request.status === "pending"
                         ? "border-pending/20 bg-pending/5"
                         : request.status === "approved"
@@ -562,19 +580,7 @@ function RecoveryRequestsPage() {
                     </p>
                   </div>
 
-                  {isAdmin ? (
-                    <RequestActions request={request} />
-                  ) : isClaimant ? (
-                    <p className="mt-4 text-sm leading-6 text-mute">
-                      This is a request you submitted. Status updates are handled
-                      by the campus admin.
-                    </p>
-                  ) : request.status === "pending" ? (
-                    <p className="mt-4 text-sm leading-6 text-mute">
-                      You reported this lost item. The campus admin will review
-                      the claim and update the status here.
-                    </p>
-                  ) : null}
+                  {isAdmin ? <RequestActions request={request} /> : null}
                 </Reveal>
               );
             })}

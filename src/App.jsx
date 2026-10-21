@@ -13,6 +13,7 @@ import ItemDetails from "./pages/ItemDetails";
 import RecoveryRequestsPage from "./pages/RecoveryRequestsPage";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ChangePassword from "./pages/ChangePassword";
 import MyReportsPage from "./pages/MyReportsPage";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -46,6 +47,14 @@ function App() {
           />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route
+            path="/change-password"
+            element={
+              <ProtectedRoute>
+                <ChangePassword />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/my-reports"
             element={

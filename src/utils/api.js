@@ -6,7 +6,9 @@ const isLocalhost =
 export const API_URL =
   import.meta.env.VITE_API_URL ||
   (isLocalhost
-    ? "http://localhost:5000"
+    ? import.meta.env.DEV
+      ? "" // Vite proxies /api to the backend, keeping requests same-origin.
+      : "http://localhost:5000"
     : typeof window !== "undefined"
       ? window.location.origin
       : "http://localhost:5000");

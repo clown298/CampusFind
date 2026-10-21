@@ -27,3 +27,13 @@ backend/.env
 .env
 .env.*
 !.env.example
+
+# Local AI/tooling directories and machine-specific files
+.agents/
+.opencode/
+.trae/
+.impeccable/
+opencode.json
+skills-lock.json
+lastfinal-pdf.pdf
+*.orig.bak

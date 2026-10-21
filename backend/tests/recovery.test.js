@@ -1,7 +1,10 @@
 process.env.NODE_ENV = 'test'
 // Point the single-admin rule at a throwaway account so the tests never touch
-// the real admin login. Production keeps the default admin email.
-process.env.ADMIN_EMAIL = 'campusfind.admin.test@campus.test'
+// the real admin login. The email is unique per run because the test database
+// is persistent: a fixed address collides with a previous run's account.
+process.env.ADMIN_EMAIL = `campusfind.admin.test_${Date.now()}_${Math.random()
+  .toString(16)
+  .slice(2)}@campus.test`
 
 const { describe, it, before, after } = require('node:test')
 const assert = require('node:assert/strict')
@@ -136,27 +139,60 @@ before(async () => {
 })
 
 after(async () => {
+  // Delete by item id as well as by tracked request id: some tests create
+  // requests that were never added to createdRequestIds, and their foreign
+  // keys would otherwise block the item cleanup and leak test rows into the
+  // public listings.
+  const cleanup = async (label, sql, params) => {
+    try {
+      await pool.query(sql, params)
+    } catch (error) {
+      console.error(`[recovery.test cleanup] ${label} failed:`, error.message)
+    }
+  }
+
+  const lostIds = createdItemIds.lost
+  const foundIds = createdItemIds.found
+
+  if (lostIds.length > 0 || foundIds.length > 0) {
+    await cleanup(
+      'recovery_requests',
+      `DELETE FROM recovery_requests
+       WHERE lost_item_id = ANY($1::int[]) OR found_item_id = ANY($2::int[])`,
+      [lostIds, foundIds]
+    )
+  }
   if (createdRequestIds.length > 0) {
-    await pool.query('DELETE FROM recovery_requests WHERE id = ANY($1::int[])', [
-      createdRequestIds,
-    ])
+    await cleanup(
+      'tracked recovery_requests',
+      'DELETE FROM recovery_requests WHERE id = ANY($1::int[])',
+      [createdRequestIds]
+    )
   }
-  if (createdItemIds.lost.length > 0) {
-    await pool.query('DELETE FROM lost_items WHERE id = ANY($1::int[])', [
-      createdItemIds.lost,
-    ])
+  if (lostIds.length > 0) {
+    await cleanup(
+      'lost_items',
+      'DELETE FROM lost_items WHERE id = ANY($1::int[])',
+      [lostIds]
+    )
   }
-  if (createdItemIds.found.length > 0) {
-    await pool.query('DELETE FROM found_items WHERE id = ANY($1::int[])', [
-      createdItemIds.found,
-    ])
+  if (foundIds.length > 0) {
+    await cleanup(
+      'found_items',
+      'DELETE FROM found_items WHERE id = ANY($1::int[])',
+      [foundIds]
+    )
   }
   if (createdUserIds.length > 0) {
-    await pool.query('DELETE FROM users WHERE id = ANY($1::int[])', [
-      createdUserIds,
-    ])
+    await cleanup(
+      'users',
+      'DELETE FROM users WHERE id = ANY($1::int[])',
+      [createdUserIds]
+    )
   }
-  await new Promise((resolve) => server.close(resolve))
+  if (server) {
+    await new Promise((resolve) => server.close(resolve))
+  }
   await pool.end()
 })
 
@@ -418,7 +454,7 @@ describe('Recovery Requests API', () => {
         body: { status },
       }, ownerCookie)
       assert.equal(res.status, 403)
-      assert.match(res.data.message, /admin/i)
+      assert.match(res.data.message, /permission/i)
     }
     // Still pending: the student's attempts changed nothing.
     const claimantTry = await api(`/api/recovery-requests/${forApprove.id}/status`, {
@@ -571,7 +607,7 @@ describe('Recovery Requests API', () => {
         body: { status },
       }, finderCookie)
       assert.equal(res.status, 403)
-      assert.match(res.data.message, /admin/i)
+      assert.match(res.data.message, /permission/i)
     }
 
     // The finder is not a party to the request, so it stays closed to them.

@@ -65,9 +65,9 @@ export function ReportIcon(props) {
 export function MatchIcon(props) {
   return (
     <Icon {...props}>
-      <path d="m9 12 1.7 1.7 3-3" />
-      <path d="M4 8.5A5.5 5.5 0 0 1 9.5 3c1.6 0 3 .7 4 1.8a4.8 4.8 0 0 1 6 4.6 4.8 4.8 0 0 1-2.8 4.4L12 20l-4.7-6.2" />
-      <path d="M8.5 10.5h.01M15.5 10.5h.01" />
+      <circle cx="9" cy="12" r="6" />
+      <circle cx="15" cy="12" r="6" />
+      <path d="m10.5 12 1.5 1.5 2.5-2.5" />
     </Icon>
   );
 }

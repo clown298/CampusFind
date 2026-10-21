@@ -1,6 +1,13 @@
-import { useState } from "react";
+import { useContext, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { LostItemContext } from "../context/LostItemContext";
+import { FoundItemContext } from "../context/FoundItemContext";
+import { RecoveryRequestContext } from "../context/RecoveryRequestContext";
+import { useDocumentTitle } from "../utils/seo";
+import { getItemDate, getItemName, formatDisplayDate } from "../utils/items";
 import Button from "../components/Button";
+import Reveal from "../components/Reveal";
+import StatusChip from "../components/StatusChip";
 import {
   SearchIcon,
   ArrowRightIcon,
@@ -12,6 +19,8 @@ import {
   RecoverIcon,
   CampusIcon,
   ShieldIcon,
+  PinIcon,
+  CalendarIcon,
 } from "../components/icons";
 
 const SCOPES = [
@@ -21,67 +30,66 @@ const SCOPES = [
 ];
 
 const SCOPE_ACTIVE = {
-  all: "bg-surface text-ink shadow-sm",
-  lost: "bg-lost/10 text-lost",
-  found: "bg-found/10 text-found",
+  all: "bg-surface text-ink shadow-sm font-semibold",
+  lost: "bg-lost/10 text-lost font-semibold",
+  found: "bg-found/10 text-found font-semibold",
 };
 
 const RECOVERY_STEPS = [
   {
     icon: ReportIcon,
-    title: "Report",
+    title: "1. Report",
     description:
-      "Add what was lost or found so people on campus can see it.",
+      "Submit details, category, location, date, and an optional photo so campus members can identify the belonging.",
   },
   {
     icon: MatchIcon,
-    title: "Match",
+    title: "2. Match",
     description:
-      "Possible matches connect found items with reports of what students have lost.",
+      "Rule-based matching compares reports using item name, category, location, and date proximity to find possible pairs.",
   },
   {
     icon: VerifyIcon,
-    title: "Verify",
+    title: "3. Verify",
     description:
-      "A recovery request helps confirm ownership before the item changes hands.",
+      "Submit a recovery request with proof of ownership for campus administrator review before property changes hands.",
   },
   {
     icon: RecoverIcon,
-    title: "Recover",
+    title: "4. Recover",
     description:
-      "The item is returned and the listing is marked as recovered.",
+      "Once approved by the campus administrator, coordinate the return and mark the listing as recovered.",
   },
 ];
 
-const WHY_ITEMS = [
+const CAMPUS_PRINCIPLES = [
   {
     icon: CampusIcon,
-    title: "Campus-focused",
+    title: "GCOEC Campus Focused",
     description:
-      "Listings are focused on the GCOEC campus community.",
+      "Designed specifically for students, faculty, and staff across the Government College of Engineering, Chandrapur campus.",
   },
   {
     icon: ReportIcon,
-    title: "Organized reports",
+    title: "Detailed Property Records",
     description:
-      "Each report includes useful details such as category, location, and date.",
+      "Every report captures item category, campus location, date, and contact details to assist in proper identification.",
   },
   {
     icon: ShieldIcon,
-    title: "Secure recovery",
+    title: "Administrative Verification",
     description:
-      "Recovery requests help confirm ownership before an item changes hands.",
+      "Recovery requests require administrator review to ensure belongings are returned to their verified rightful owners.",
   },
   {
     icon: MatchIcon,
-    title: "Possible matches",
+    title: "Rule-Based Matching",
     description:
-      "Lost and found reports can be compared to help connect items with their owners.",
+      "Deterministic similarity scoring compares lost and found listings to highlight potential matching candidates.",
   },
 ];
 
-const containerClass =
-  "mx-auto w-full min-w-0 max-w-[1440px] px-4 sm:px-8";
+const containerClass = "mx-auto w-full min-w-0 max-w-[1440px] px-4 sm:px-8";
 
 function HeroSearch({
   query,
@@ -92,7 +100,7 @@ function HeroSearch({
   handleSearchKeyDown,
 }) {
   return (
-    <div className="w-full max-w-xl rounded-card bg-surface p-2.5 lg:max-w-none">
+    <div className="w-full rounded-card border border-line bg-surface p-4 shadow-sm shadow-black/5 sm:p-5">
       <div
         role="group"
         aria-label="Choose search scope"
@@ -105,7 +113,7 @@ function HeroSearch({
             aria-pressed={scope === s.value}
             onClick={() => setScope(s.value)}
             className={[
-              "min-h-[44px] flex-1 cursor-pointer rounded-control px-3 text-sm font-semibold transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus",
+              "min-h-[38px] flex-1 cursor-pointer rounded-control px-3 text-xs font-semibold transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus",
               scope === s.value
                 ? SCOPE_ACTIVE[s.value]
                 : "text-mute hover:text-ink",
@@ -116,50 +124,116 @@ function HeroSearch({
         ))}
       </div>
 
-      <div className="mt-2.5 flex min-h-[52px] items-center gap-2 rounded-control border border-line bg-surface px-3.5 transition-colors duration-150 focus-within:border-focus focus-within:ring-2 focus-within:ring-focus/30">
-        <SearchIcon className="h-5 w-5 shrink-0 text-mute" />
+      <div className="mt-3 flex min-h-[46px] items-center gap-2 rounded-control border border-line bg-surface px-3.5 transition-colors duration-150 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+        <SearchIcon className="h-4 w-4 shrink-0 text-mute" />
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleSearchKeyDown}
-          placeholder="Search by item, category, or location"
+          placeholder="Search items by name, category, or location..."
           aria-label="Search lost and found items"
-          className="h-12 w-full min-w-0 flex-1 border-0 bg-transparent text-[15px] text-ink placeholder:text-mute/70 focus:outline-none focus:ring-0"
+          className="h-10 w-full min-w-0 flex-1 border-0 bg-transparent text-sm text-ink placeholder:text-mute/70 focus:outline-none"
         />
         <button
           type="button"
           onClick={handleSearch}
-          className="inline-flex min-h-[44px] shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-control bg-ink px-4 text-sm font-semibold text-white transition-colors duration-200 hover:bg-ink-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+          className="inline-flex min-h-[36px] shrink-0 cursor-pointer items-center justify-center rounded-control bg-primary px-4 text-xs font-semibold text-white transition-colors duration-200 hover:bg-primary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
         >
           Search
         </button>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-5 gap-y-1 px-1 pb-1">
-        <Link
-          to="/lost-items"
-          className="inline-flex min-h-[36px] items-center gap-1.5 text-sm font-semibold text-ink/70 transition-colors duration-200 hover:text-lost focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-        >
-          <LostIcon size={16} className="text-lost" />
-          I lost something
-        </Link>
-        <Link
-          to="/found-items"
-          className="inline-flex min-h-[36px] items-center gap-1.5 text-sm font-semibold text-ink/70 transition-colors duration-200 hover:text-found focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-        >
-          <FoundIcon size={16} className="text-found" />
-          I found something
-        </Link>
+      <div className="mt-3.5 flex flex-wrap items-center gap-x-2.5 gap-y-2 pt-1 text-xs text-mute">
+        <span className="font-medium text-ink/70">Popular campus categories:</span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {["Electronics", "Keys", "Documents", "Books"].map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setQuery(cat)}
+              className="inline-flex min-h-[28px] cursor-pointer items-center rounded-control bg-paper px-2.5 py-1 text-xs font-medium text-ink/80 transition-colors duration-150 hover:bg-frost hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
+function RecentItemRow({ item, kind, status }) {
+  const isFound = kind === "found";
+  const displayName = getItemName(item);
+  const displayDate = formatDisplayDate(getItemDate(item, kind));
+  const linkPath = isFound
+    ? `/found-items/${item.id}`
+    : `/lost-items/${item.id}`;
+
+  const statusMeta = {
+    Open: { chip: "border-line bg-paper text-mute", dot: "bg-mute" },
+    "In Recovery": {
+      chip: "border-pending/30 bg-pending/10 text-pending",
+      dot: "bg-pending",
+    },
+  };
+  const currentMeta = statusMeta[status] || statusMeta.Open;
+
+  return (
+    <Link
+      to={linkPath}
+      className={`group flex items-start justify-between gap-3 rounded-control border border-line bg-surface p-3.5 transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-sm hover:shadow-black/5 ${
+        isFound
+          ? "hover:border-found/40 hover:bg-found-tint/30"
+          : "hover:border-lost/40 hover:bg-lost-tint/30"
+      } focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-paper`}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs font-semibold uppercase tracking-wider text-mute">
+            {item.category || "General"}
+          </span>
+          {status === "In Recovery" && (
+            <StatusChip
+              label="In Recovery"
+              classes={currentMeta.chip}
+              dot={currentMeta.dot}
+            />
+          )}
+        </div>
+        <h4 className="type-card mt-1 truncate text-base font-medium text-ink group-hover:text-primary transition-colors">
+          {displayName}
+        </h4>
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-mute">
+          <span className="inline-flex items-center gap-1">
+            <PinIcon size={12} className="shrink-0 text-mute" />
+            <span className="truncate">{item.location}</span>
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <CalendarIcon size={12} className="shrink-0 text-mute" />
+            <span>{displayDate}</span>
+          </span>
+        </div>
+      </div>
+      <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-control border border-line text-mute transition-[border-color,color,transform] duration-150 group-hover:border-primary group-hover:text-primary group-hover:translate-x-0.5">
+        <ArrowRightIcon size={14} />
+      </span>
+    </Link>
+  );
+}
+
 function Home() {
+  useDocumentTitle("Campus Lost & Found");
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [scope, setScope] = useState("all");
+
+  const { lostItems, isLoading: lostLoading, loadError: lostError } =
+    useContext(LostItemContext);
+  const { foundItems, isLoading: foundLoading, loadError: foundError } =
+    useContext(FoundItemContext);
+  const { recoveryRequests } = useContext(RecoveryRequestContext);
 
   function handleSearch() {
     const targetScope = scope === "found" ? "found" : "lost";
@@ -176,33 +250,119 @@ function Home() {
     }
   }
 
+  const activeLost = useMemo(() => {
+    const requests = recoveryRequests || [];
+    const recoveredIds = new Set(
+      requests
+        .filter((r) => r.status === "recovered")
+        .map((r) => String(r.lostItemId))
+    );
+    const inRecoveryIds = new Set(
+      requests
+        .filter((r) => r.status === "pending" || r.status === "approved")
+        .map((r) => String(r.lostItemId))
+    );
+
+    return lostItems
+      .filter((item) => !recoveredIds.has(String(item.id)))
+      .slice(0, 3)
+      .map((item) => ({
+        ...item,
+        status: inRecoveryIds.has(String(item.id)) ? "In Recovery" : "Open",
+      }));
+  }, [lostItems, recoveryRequests]);
+
+  const activeFound = useMemo(() => {
+    const requests = recoveryRequests || [];
+    const recoveredIds = new Set(
+      requests
+        .filter((r) => r.status === "recovered")
+        .map((r) => String(r.foundItemId))
+    );
+    const inRecoveryIds = new Set(
+      requests
+        .filter((r) => r.status === "pending" || r.status === "approved")
+        .map((r) => String(r.foundItemId))
+    );
+
+    return foundItems
+      .filter((item) => !recoveredIds.has(String(item.id)))
+      .slice(0, 3)
+      .map((item) => ({
+        ...item,
+        status: inRecoveryIds.has(String(item.id)) ? "In Recovery" : "Open",
+      }));
+  }, [foundItems, recoveryRequests]);
+
   return (
-    <div className="w-full min-w-0 overflow-x-clip">
-      {/* 1. Main entry — refined dark band, statement left, actions deck right */}
-      <section className="bg-ink" aria-labelledby="main-entry">
+    <div className="w-full min-w-0 overflow-x-clip bg-paper">
+      {/* 1. Main Entry — Warm Editorial Hero */}
+      <section
+        className="border-b border-line bg-paper py-12 sm:py-16 lg:py-20"
+        aria-labelledby="hero-heading"
+      >
         <div className={containerClass}>
-          <div className="grid grid-cols-1 items-center gap-10 py-12 lg:grid-cols-12 lg:gap-14 lg:py-16">
+          <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-12 lg:gap-12">
             <div className="min-w-0 lg:col-span-7">
-              <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white/80">
+              <p style={{ animationDelay: "0ms" }} className="hero-rise inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-mute">
                 <span
-                  className="h-2 w-2 rounded-full bg-canopy"
+                  className="h-2 w-2 rounded-full bg-primary"
                   aria-hidden="true"
                 />
-                GCOEC &bull; Campus Lost &amp; Found
+                GCOEC • Campus Lost &amp; Found
               </p>
 
-              <h1 className="type-display mt-5 text-4xl text-white sm:text-5xl lg:text-[3.5rem]">
-                Report it, match it, get it back.
+              <h1
+                id="hero-heading"
+                style={{ animationDelay: "80ms" }}
+                className="hero-rise type-display mt-5 text-5xl font-bold text-ink sm:text-6xl md:text-7xl lg:text-[5.25rem] xl:text-[6.25rem] leading-[1.02] tracking-tight"
+              >
+                CampusFind
               </h1>
 
-              <p className="mt-5 max-w-xl text-base leading-7 text-white/75">
-                CampusFind is the campus registry for lost and found items at
-                GCOEC. Report what you lost or found, check the listings, and
-                follow the recovery process in one place.
+              <p
+                style={{ animationDelay: "140ms" }}
+                className="hero-rise type-title mt-3.5 text-xl font-bold text-ink sm:text-2xl lg:text-[1.65rem] leading-snug tracking-tight"
+              >
+                Report, match, and recover lost belongings on campus.
               </p>
+
+              <p style={{ animationDelay: "200ms" }} className="hero-rise mt-3.5 max-w-2xl text-base leading-7 text-mute sm:text-lg">
+                CampusFind is a campus lost-and-found platform for Government College of
+                Engineering, Chandrapur. Report what you misplaced, browse turned-in
+                belongings, and request recovery through the admin review process.
+              </p>
+
+              {/* Immediate Primary Actions */}
+              <div style={{ animationDelay: "240ms" }} className="hero-rise mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+                <Button
+                  to="/report-lost"
+                  variant="lost"
+                  className="w-full gap-2 sm:w-auto"
+                >
+                  <ReportIcon size={16} />
+                  Report a Lost Item
+                </Button>
+                <Button
+                  to="/report-found"
+                  variant="found"
+                  className="w-full gap-2 sm:w-auto"
+                >
+                  <FoundIcon size={16} />
+                  Report a Found Item
+                </Button>
+                <Button
+                  to="/lost-items"
+                  variant="secondary"
+                  className="w-full sm:w-auto"
+                >
+                  Browse Listings
+                </Button>
+              </div>
             </div>
 
-            <div className="min-w-0 lg:col-span-5">
+            {/* Search Box Deck */}
+            <div style={{ animationDelay: "120ms" }} className="hero-rise min-w-0 lg:col-span-5">
               <HeroSearch
                 query={query}
                 setQuery={setQuery}
@@ -216,244 +376,250 @@ function Home() {
         </div>
       </section>
 
-      {/* 2. Make a report — heading column + one shared twin-panel surface */}
-      <section className="bg-paper" aria-labelledby="make-a-report">
+      {/* 2. Recent Campus Listings */}
+      <section
+        className="border-b border-line bg-surface py-12 sm:py-16"
+        aria-labelledby="recent-listings"
+      >
         <div className={containerClass}>
-          <div className="grid grid-cols-1 gap-8 py-12 lg:grid-cols-12 lg:gap-14 lg:py-16">
-            <div className="lg:col-span-4">
-              <p className="type-eyebrow text-mute">Make a report</p>
-              <h2
-                id="make-a-report"
-                className="type-section mt-2.5 text-2xl text-ink sm:text-3xl"
-              >
-                Two reports, one registry
-              </h2>
-              <p className="mt-3 max-w-md text-[15px] leading-6 text-mute">
-                Lost something? Found something? The details you add are what
-                help someone identify it, or help it get back to its owner.
-              </p>
-            </div>
-
-            <div className="lg:col-span-8">
-              <div className="overflow-hidden rounded-card border border-line bg-surface sm:grid sm:grid-cols-2">
-                <div className="flex flex-col p-6 sm:p-7">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-lost text-white">
-                      <LostIcon size={20} />
-                    </span>
-                    <h3 className="type-card text-lg text-ink">
-                      You lost something
-                    </h3>
-                  </div>
-                  <p className="mt-3 flex-1 text-[15px] leading-6 text-mute">
-                    Report what you lost with the details that can help someone
-                    identify it.
-                  </p>
-                  <div className="mt-6">
-                    <Button
-                      to="/report-lost"
-                      variant="secondary"
-                      className="w-full gap-2"
-                    >
-                      Report Lost Item
-                      <ArrowRightIcon size={16} className="text-lost" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="flex flex-col border-t border-line p-6 sm:border-l sm:border-t-0 sm:p-7">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-found text-white">
-                      <FoundIcon size={20} />
-                    </span>
-                    <h3 className="type-card text-lg text-ink">
-                      You found something
-                    </h3>
-                  </div>
-                  <p className="mt-3 flex-1 text-[15px] leading-6 text-mute">
-                    Report what you found so its owner has a chance to get it
-                    back.
-                  </p>
-                  <div className="mt-6">
-                    <Button
-                      to="/report-found"
-                      variant="secondary"
-                      className="w-full gap-2"
-                    >
-                      Report Found Item
-                      <ArrowRightIcon size={16} className="text-found" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 3. Registry access — one shared surface, two entry rows */}
-      <section className="py-12 lg:py-16" aria-labelledby="browse-listings">
-        <div className={containerClass}>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-8">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="type-eyebrow text-mute">Registry access</p>
+              <p className="type-eyebrow text-primary">Live Campus Listings</p>
               <h2
-                id="browse-listings"
-                className="type-section mt-2.5 text-2xl text-ink sm:text-3xl"
+                id="recent-listings"
+                className="type-section mt-1.5 text-2xl font-semibold text-ink sm:text-3xl"
               >
-                Browse the listings
+                Recently reported on campus
               </h2>
             </div>
-            <p className="max-w-lg text-[15px] leading-6 text-mute">
-              Check lost and found reports, view item details, and request
-              recovery when you find a possible match.
+            <p className="max-w-md text-sm leading-6 text-mute">
+              Real-time records from students and staff across GCOEC departments and facilities.
             </p>
           </div>
 
-          <div className="mt-7 overflow-hidden rounded-card border border-line bg-surface sm:grid sm:grid-cols-2">
-            <Link
-              to="/lost-items"
-              className="group flex items-center justify-between gap-4 p-5 transition-colors duration-200 hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus sm:p-6"
-            >
-              <span className="flex min-w-0 items-center gap-4">
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-lost/10 text-lost">
-                  <LostIcon size={24} />
-                </span>
-                <span className="min-w-0">
-                  <span className="type-card block text-lg text-ink">
-                    Lost Items
+          <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
+            {/* Recent Lost Reports */}
+            <Reveal className="rounded-card border border-line bg-surface p-5 sm:p-6 shadow-sm shadow-black/5">
+              <div className="flex items-center justify-between pb-4 border-b border-line">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-control border border-lost/25 bg-lost/10 text-lost">
+                    <LostIcon size={16} />
                   </span>
-                  <span className="mt-1 block text-sm text-mute">
-                    Items reported missing across campus
-                  </span>
-                </span>
-              </span>
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control border border-line text-mute transition-colors duration-200 group-hover:border-lost group-hover:bg-lost group-hover:text-white">
-                <ArrowRightIcon size={18} />
-              </span>
-            </Link>
+                  <div>
+                    <h3 className="type-card text-base font-semibold text-ink">
+                      Recent Lost Items
+                    </h3>
+                    <p className="text-xs text-mute">Misplaced on campus</p>
+                  </div>
+                </div>
+                <Link
+                  to="/lost-items"
+                  className="inline-flex min-h-[32px] items-center gap-1.5 rounded-control px-2 text-xs font-semibold text-primary transition-colors duration-150 hover:bg-frost focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                >
+                  View all lost
+                  <ArrowRightIcon size={12} />
+                </Link>
+              </div>
 
-            <Link
-              to="/found-items"
-              className="group flex items-center justify-between gap-4 border-t border-line p-5 transition-colors duration-200 hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus sm:border-l sm:border-t-0 sm:p-6"
-            >
-              <span className="flex min-w-0 items-center gap-4">
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-found/10 text-found">
-                  <FoundIcon size={24} />
-                </span>
-                <span className="min-w-0">
-                  <span className="type-card block text-lg text-ink">
-                    Found Items
+              <div className="mt-4 space-y-3">
+                {lostLoading ? (
+                  <div className="py-8 text-center text-sm text-mute">
+                    Loading recent lost items…
+                  </div>
+                ) : lostError ? (
+                  <div className="rounded-control border border-lost/25 bg-lost/5 p-3.5 text-xs text-lost">
+                    Could not load recent lost items. Please check the lost items page.
+                  </div>
+                ) : activeLost.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <p className="text-sm font-medium text-ink">
+                      No active lost items reported
+                    </p>
+                    <p className="mt-1 text-xs text-mute">
+                      When someone reports a missing belonging, it will appear here.
+                    </p>
+                    <Link
+                      to="/report-lost"
+                      className="mt-3 inline-block text-xs font-semibold text-primary hover:underline"
+                    >
+                      Report a lost item &rarr;
+                    </Link>
+                  </div>
+                ) : (
+                  activeLost.map((item) => (
+                    <RecentItemRow
+                      key={item.id}
+                      item={item}
+                      kind="lost"
+                      status={item.status}
+                    />
+                  ))
+                )}
+              </div>
+            </Reveal>
+
+            {/* Recent Found Reports */}
+            <Reveal delay={100} className="rounded-card border border-line bg-surface p-5 sm:p-6 shadow-sm shadow-black/5">
+              <div className="flex items-center justify-between pb-4 border-b border-line">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-control border border-found/25 bg-found/10 text-found">
+                    <FoundIcon size={16} />
                   </span>
-                  <span className="mt-1 block text-sm text-mute">
-                    Items reported as found across campus
-                  </span>
-                </span>
-              </span>
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control border border-line text-mute transition-colors duration-200 group-hover:border-found group-hover:bg-found group-hover:text-white">
-                <ArrowRightIcon size={18} />
-              </span>
-            </Link>
+                  <div>
+                    <h3 className="type-card text-base font-semibold text-ink">
+                      Recent Found Items
+                    </h3>
+                    <p className="text-xs text-mute">Turned in or located</p>
+                  </div>
+                </div>
+                <Link
+                  to="/found-items"
+                  className="inline-flex min-h-[32px] items-center gap-1.5 rounded-control px-2 text-xs font-semibold text-found transition-colors duration-150 hover:bg-found-tint focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                >
+                  View all found
+                  <ArrowRightIcon size={12} />
+                </Link>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {foundLoading ? (
+                  <div className="py-8 text-center text-sm text-mute">
+                    Loading recent found items…
+                  </div>
+                ) : foundError ? (
+                  <div className="rounded-control border border-found/25 bg-found/5 p-3.5 text-xs text-found">
+                    Could not load recent found items. Please check the found items page.
+                  </div>
+                ) : activeFound.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <p className="text-sm font-medium text-ink">
+                      No active found items reported
+                    </p>
+                    <p className="mt-1 text-xs text-mute">
+                      When someone turns in a found belonging, it will appear here.
+                    </p>
+                    <Link
+                      to="/report-found"
+                      className="mt-3 inline-block text-xs font-semibold text-found hover:underline"
+                    >
+                      Report a found item &rarr;
+                    </Link>
+                  </div>
+                ) : (
+                  activeFound.map((item) => (
+                    <RecentItemRow
+                      key={item.id}
+                      item={item}
+                      kind="found"
+                      status={item.status}
+                    />
+                  ))
+                )}
+              </div>
+            </Reveal>
           </div>
         </div>
       </section>
 
-      {/* 4. Recovery process — one connected workflow panel */}
-      <section className="bg-paper" aria-labelledby="recovery-process">
+      {/* 3. 4-Step Recovery Process */}
+      <section
+        id="recovery-workflow"
+        className="border-b border-line bg-paper py-14 sm:py-16"
+        aria-labelledby="workflow-heading"
+      >
         <div className={containerClass}>
-          <div className="py-12 lg:py-16">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-8">
-              <div>
-                <p className="type-eyebrow text-canopy">Recovery</p>
-                <h2
-                  id="recovery-process"
-                  className="type-section mt-2.5 text-2xl text-ink sm:text-3xl"
-                >
-                  How an item gets back to you
-                </h2>
-              </div>
-              <p className="flex max-w-md items-start gap-2 text-sm leading-6 text-mute">
-                <ShieldIcon
-                  size={16}
-                  className="mt-1 shrink-0 text-pending"
-                  aria-hidden="true"
-                />
-                Ownership is confirmed before an item changes hands.
-              </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="type-eyebrow text-primary">Process</p>
+              <h2
+                id="workflow-heading"
+                className="type-section mt-1.5 text-2xl font-semibold text-ink sm:text-3xl"
+              >
+                How property gets returned
+              </h2>
             </div>
+            <p className="flex items-center gap-1.5 text-xs font-medium text-mute">
+              <ShieldIcon size={14} className="text-pending shrink-0" />
+              Claims are reviewed by the campus administrator before items are returned.
+            </p>
+          </div>
 
-            <ol className="mt-7 grid grid-cols-1 gap-px overflow-hidden rounded-card border border-line bg-line md:grid-cols-2 lg:grid-cols-4">
-              {RECOVERY_STEPS.map((step, index) => {
-                const StepIcon = step.icon;
-                return (
-                  <li
-                    key={step.title}
-                    className="flex min-w-0 flex-col bg-surface p-5 md:p-6"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-canopy/10 text-canopy">
-                        <StepIcon size={18} />
-                      </span>
-                      <span className="type-eyebrow text-mute/70">
-                        Step {index + 1}
-                      </span>
-                    </div>
-                    <h3 className="type-card mt-4 text-base text-ink">
+          <ol className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {RECOVERY_STEPS.map((step, index) => {
+              const StepIcon = step.icon;
+              return (
+                <Reveal as="li" key={step.title} delay={index * 80} className="min-w-0">
+                  <div className="h-full rounded-card border border-line bg-surface p-5 shadow-sm shadow-black/5">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-control border border-line bg-paper text-primary">
+                      <StepIcon size={16} />
+                    </span>
+                    <h3 className="type-card mt-3.5 text-base font-semibold text-ink">
                       {step.title}
                     </h3>
-                    <p className="mt-1.5 text-sm leading-6 text-mute">
+                    <p className="mt-2 text-xs leading-relaxed text-mute">
                       {step.description}
                     </p>
-                  </li>
-                );
-              })}
-            </ol>
-          </div>
+                  </div>
+                </Reveal>
+              );
+            })}
+          </ol>
         </div>
       </section>
 
-      {/* 5. Built for GCOEC — system summary */}
-      <section className="py-12 lg:py-16" aria-labelledby="why-campusfind">
+      {/* 4. Built for GCOEC Platform Standards */}
+      <section
+        className="border-b border-line bg-surface py-14 sm:py-16"
+        aria-labelledby="campus-standards-heading"
+      >
         <div className={containerClass}>
           <div className="grid grid-cols-1 gap-10 lg:grid-cols-12 lg:gap-14">
-            <div className="lg:col-span-5">
-              <p className="type-eyebrow text-mute">About CampusFind</p>
+            <div className="min-w-0 lg:col-span-5">
+              <p className="type-eyebrow text-primary">Platform Standards</p>
               <h2
-                id="why-campusfind"
-                className="type-section mt-2.5 text-2xl text-ink sm:text-3xl"
+                id="campus-standards-heading"
+                className="type-section mt-1.5 text-2xl font-semibold text-ink sm:text-3xl"
               >
                 Built for GCOEC
               </h2>
-              <p className="mt-3 max-w-md text-[15px] leading-6 text-mute">
-                A simple campus system for reporting, matching, and recovering
-                lost belongings.
+              <p className="mt-3 text-sm leading-relaxed text-mute">
+                A straightforward, transparent campus registry helping students and
+                staff report, match, and recover lost property without unnecessary overhead.
               </p>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Button to="/lost-items" variant="secondary">
+                  Browse Lost Items
+                </Button>
+                <Button to="/found-items" variant="secondary">
+                  Browse Found Items
+                </Button>
+              </div>
             </div>
 
-            <div className="lg:col-span-7">
-              <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2">
-                {WHY_ITEMS.map((feature) => {
+            <div className="min-w-0 lg:col-span-7">
+              <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {CAMPUS_PRINCIPLES.map((feature, index) => {
                   const FeatureIcon = feature.icon;
                   return (
-                    <div
+                    <Reveal
+                      as="li"
                       key={feature.title}
-                      className="flex flex-col gap-3 sm:flex-row sm:items-start"
+                      delay={index * 80}
+                      className="rounded-card border border-line bg-surface p-4 sm:p-5 shadow-sm shadow-black/5"
                     >
-                      <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-paper text-ink">
-                        <FeatureIcon size={20} />
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-control border border-line bg-paper text-primary">
+                        <FeatureIcon size={16} />
                       </span>
-                      <div>
-                        <h3 className="type-card text-base text-ink">
-                          {feature.title}
-                        </h3>
-                        <p className="mt-1.5 text-sm leading-6 text-mute">
-                          {feature.description}
-                        </p>
-                      </div>
-                    </div>
+                      <h3 className="type-card mt-2.5 text-sm font-semibold text-ink">
+                        {feature.title}
+                      </h3>
+                      <p className="mt-1 text-xs leading-relaxed text-mute">
+                        {feature.description}
+                      </p>
+                    </Reveal>
                   );
                 })}
-              </div>
+              </ul>
             </div>
           </div>
         </div>

@@ -28,10 +28,11 @@ function AuthProvider({ children }) {
     };
   }, []);
 
-  async function login(email, password) {
+  async function login({ email, prn, password }) {
+    const body = prn ? { prn, password } : { email, password };
     const data = await apiRequest("/api/auth/login", {
       method: "POST",
-      body: { email, password },
+      body,
     });
     const loggedIn = data && data.user;
     if (!loggedIn) {
@@ -43,10 +44,12 @@ function AuthProvider({ children }) {
     return loggedIn;
   }
 
-  async function register(name, email, password) {
+  async function register(name, email, password, prn) {
+    const body = { name, email, password };
+    if (prn) body.prn = prn;
     const data = await apiRequest("/api/auth/register", {
       method: "POST",
-      body: { name, email, password },
+      body,
     });
     const newUser = data && data.user;
     if (!newUser) {
@@ -56,6 +59,21 @@ function AuthProvider({ children }) {
     }
     setUser(newUser);
     return newUser;
+  }
+
+  async function changePassword(currentPassword, newPassword) {
+    const data = await apiRequest("/api/auth/change-password", {
+      method: "POST",
+      body: { currentPassword, newPassword },
+    });
+    const updated = data && data.user;
+    if (!updated) {
+      const err = new Error("Could not update your password.");
+      err.code = "API_ERROR";
+      throw err;
+    }
+    setUser(updated);
+    return updated;
   }
 
   async function logout() {
@@ -77,6 +95,8 @@ function AuthProvider({ children }) {
     }
   }
 
+  const permissions = (user && user.permissions) || {};
+
   return (
     <AuthContext.Provider
       value={{
@@ -84,8 +104,13 @@ function AuthProvider({ children }) {
         loading,
         isAuthenticated: Boolean(user),
         isAdmin: Boolean(user && user.isAdmin),
+        isStaff: Boolean(user && user.role === "staff"),
+        role: (user && user.role) || "student",
+        mustChangePassword: Boolean(user && user.mustChangePassword),
+        canReviewRecovery: Boolean(permissions.reviewRecovery),
         login,
         register,
+        changePassword,
         logout,
         refreshUser,
       }}

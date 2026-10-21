@@ -7,15 +7,30 @@ const jwt = require('jsonwebtoken')
 const rateLimit = require('express-rate-limit')
 const pool = require('./config/db')
 const { ensureSchema } = require('./config/schema')
-const { isAdminUser } = require('./config/roles')
+const {
+  ROLES,
+  normalizePrn,
+  prnError,
+  roleForNewAccount,
+  isAdminUser,
+  canReviewRecovery,
+} = require('./config/roles')
 
 const app = express()
 
 app.use(helmet())
 
+// Accept a comma-separated allow-list so both local dev hostnames work.
+const allowedOrigins = (
+  process.env.CORS_ORIGIN || 'http://localhost:5173,http://127.0.0.1:5173'
+)
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean)
+
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    origin: allowedOrigins,
     credentials: true,
   })
 )
@@ -87,11 +102,14 @@ if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
 const JWT_SECRET = process.env.JWT_SECRET
 const COOKIE_NAME = 'campusfind_token'
 const TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+const IS_PRODUCTION = process.env.NODE_ENV === 'production'
 
+// SameSite=None requires Secure, which browsers reject on plain-HTTP local
+// development. Use Lax in development so the session cookie is actually kept.
 const COOKIE_OPTIONS = {
   httpOnly: true,
-  sameSite: 'none',
-  secure: process.env.NODE_ENV === 'production',
+  sameSite: IS_PRODUCTION ? 'none' : 'lax',
+  secure: IS_PRODUCTION,
   path: '/',
   maxAge: TOKEN_MAX_AGE_MS,
 }
@@ -114,8 +132,14 @@ function toSafeUser(row) {
     id: row.id,
     name: row.name,
     email: row.email,
+    prn: row.prn || null,
+    role: row.role || ROLES.STUDENT,
     createdAt: row.created_at,
     isAdmin: isAdminUser(row),
+    mustChangePassword: Boolean(row.must_change_password),
+    permissions: {
+      reviewRecovery: canReviewRecovery(row),
+    },
   }
 }
 
@@ -142,7 +166,9 @@ async function requireAuth(req, res, next) {
     }
 
     const result = await pool.query(
-      'SELECT id, name, email, token_version, created_at FROM users WHERE id = $1',
+      `SELECT id, name, email, token_version, created_at, role, prn,
+              must_change_password, can_review_recovery
+         FROM users WHERE id = $1`,
       [payload.sub]
     )
     if (result.rows.length === 0) {
@@ -161,19 +187,33 @@ async function requireAuth(req, res, next) {
   }
 }
 
-// Recovery decisions (approve / reject / mark recovered) belong to the single
-// admin account only. Students keep read access to their own requests.
-function requireAdmin(req, res, next) {
-  if (!isAdminUser(req.user)) {
+// Recovery decisions (approve / reject / mark recovered) belong to the admin
+// account, or to a staff account that was explicitly granted the
+// `reviewRecovery` permission. Students keep read access to their own requests.
+function requireReviewRecovery(req, res, next) {
+  if (!canReviewRecovery(req.user)) {
     return res.status(403).json({
-      message: 'Only the campus admin can review recovery requests.',
+      message: 'You do not have permission to review recovery requests.',
     })
   }
   next()
 }
 
-// Students may only edit/delete their own reports; the single admin account
-// can moderate any Lost or Found report.
+// A provisioned account signs in with its temporary credential and must pick a
+// real password before touching anything else. Enforced here so the browser
+// cannot skip the change-password screen.
+function requirePasswordChange(req, res, next) {
+  if (req.user && req.user.must_change_password) {
+    return res.status(403).json({
+      code: 'PASSWORD_CHANGE_REQUIRED',
+      message: 'Please change your password before continuing.',
+    })
+  }
+  next()
+}
+
+// Students may only edit/delete their own reports; the admin account and any
+// account with the moderation permission can edit any Lost or Found report.
 function canManageItem(reqUser, ownerId) {
   if (isAdminUser(reqUser)) return true
   return Boolean(ownerId) && reqUser.id === ownerId
@@ -203,18 +243,59 @@ function validateRegister(body) {
     errors.password = 'Password must be at least 8 characters.'
   }
 
+  // PRN is optional at signup. When present it must be well-formed, so a
+  // typo here fails loudly instead of silently disabling PRN login later.
+  const prnProvided =
+    body.prn !== undefined && body.prn !== null && String(body.prn).trim() !== ''
+  if (prnProvided) {
+    const message = prnError(body.prn)
+    if (message) errors.prn = message
+  }
+
   return errors
 }
 
 function validateLogin(body) {
   const errors = {}
   body = body || {}
-  if (typeof body.email !== 'string' || !body.email.trim()) {
-    errors.email = 'Email is required.'
-  }
+
+  const hasPrn =
+    body.prn !== undefined && body.prn !== null && String(body.prn).trim() !== ''
+  const hasEmail =
+    typeof body.email === 'string' && body.email.trim() !== ''
+
   if (typeof body.password !== 'string' || !body.password) {
     errors.password = 'Password is required.'
   }
+
+  // Sign in with either a student PRN or an email address, never both.
+  if (hasPrn && hasEmail) {
+    errors.identifier = 'Enter either your PRN or your email address, not both.'
+  } else if (!hasPrn && !hasEmail) {
+    errors.identifier = 'Enter your PRN or your email address.'
+  } else if (hasPrn) {
+    const message = prnError(body.prn)
+    if (message) errors.prn = message
+  } else if (hasEmail && !EMAIL_RE.test(body.email.trim())) {
+    errors.email = 'Enter a valid email address.'
+  }
+
+  return errors
+}
+
+function validatePasswordChange(body) {
+  const errors = {}
+  body = body || {}
+
+  if (typeof body.currentPassword !== 'string' || !body.currentPassword) {
+    errors.currentPassword = 'Current password is required.'
+  }
+  if (typeof body.newPassword !== 'string' || body.newPassword.length < 8) {
+    errors.newPassword = 'New password must be at least 8 characters.'
+  } else if (body.newPassword === body.currentPassword) {
+    errors.newPassword = 'Choose a password different from your current one.'
+  }
+
   return errors
 }
 
@@ -230,6 +311,9 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
 
   const name = req.body.name.trim()
   const email = req.body.email.trim().toLowerCase()
+  const prnProvided =
+    req.body.prn !== undefined && req.body.prn !== null && String(req.body.prn).trim() !== ''
+  const prn = prnProvided ? normalizePrn(req.body.prn) : null
 
   try {
     const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email])
@@ -237,12 +321,26 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
       return res.status(409).json({ message: 'An account with this email already exists.' })
     }
 
+    if (prn) {
+      const prnTaken = await pool.query('SELECT id FROM users WHERE prn = $1', [prn])
+      if (prnTaken.rows.length > 0) {
+        return res.status(409).json({
+          message: 'An account with this PRN already exists.',
+          errors: { prn: 'This PRN is already registered.' },
+        })
+      }
+    }
+
+    // The browser never chooses a role. Only the bootstrap email lists can
+    // produce a staff or admin account at registration time.
+    const role = roleForNewAccount(email)
     const passwordHash = await bcrypt.hash(req.body.password, 10)
     const result = await pool.query(
-      `INSERT INTO users (name, email, password_hash)
-       VALUES ($1, $2, $3)
-       RETURNING id, name, email, created_at, token_version`,
-      [name, email, passwordHash]
+      `INSERT INTO users (name, email, password_hash, prn, role)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, name, email, created_at, token_version, role, prn,
+                 must_change_password, can_review_recovery`,
+      [name, email, passwordHash, prn, role]
     )
 
     const token = jwt.sign(
@@ -268,21 +366,29 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     return res.status(400).json({ message: 'Validation failed.', errors })
   }
 
-  const email = req.body.email.trim().toLowerCase()
+  const hasPrn =
+    req.body.prn !== undefined && req.body.prn !== null && String(req.body.prn).trim() !== ''
+  const identifier = hasPrn
+    ? { column: 'prn', value: normalizePrn(req.body.prn) }
+    : { column: 'email', value: req.body.email.trim().toLowerCase() }
 
   try {
     const result = await pool.query(
-      'SELECT id, name, email, password_hash, created_at, token_version FROM users WHERE email = $1',
-      [email]
+      `SELECT id, name, email, password_hash, created_at, token_version, role, prn,
+              must_change_password, can_review_recovery
+         FROM users WHERE ${identifier.column} = $1`,
+      [identifier.value]
     )
     const user = result.rows[0]
     if (!user) {
-      return res.status(401).json({ message: 'Invalid email or password.' })
+      return res.status(401).json({ message: 'Invalid credentials.' })
     }
 
+    // Password is always checked, including for provisioned accounts that
+    // still hold their temporary credential.
     const matches = await bcrypt.compare(req.body.password, user.password_hash)
     if (!matches) {
-      return res.status(401).json({ message: 'Invalid email or password.' })
+      return res.status(401).json({ message: 'Invalid credentials.' })
     }
 
     const token = jwt.sign(
@@ -296,6 +402,62 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
   } catch (error) {
     console.error('Login error:', error.message)
     res.status(500).json({ message: 'Failed to log in' })
+  }
+})
+
+app.post('/api/auth/change-password', requireAuth, async (req, res) => {
+  const errors = validatePasswordChange(req.body)
+  if (Object.keys(errors).length > 0) {
+    return res.status(400).json({ message: 'Validation failed.', errors })
+  }
+
+  try {
+    const result = await pool.query(
+      'SELECT id, password_hash FROM users WHERE id = $1',
+      [req.user.id]
+    )
+    const user = result.rows[0]
+    if (!user) {
+      return res.status(401).json({ message: 'Please log in to continue.' })
+    }
+
+    const matches = await bcrypt.compare(req.body.currentPassword, user.password_hash)
+    if (!matches) {
+      return res.status(400).json({
+        message: 'Your current password is incorrect.',
+        errors: { currentPassword: 'Your current password is incorrect.' },
+      })
+    }
+
+    const passwordHash = await bcrypt.hash(req.body.newPassword, 10)
+    // Bumping token_version invalidates every other session, so a stolen
+    // temporary credential cannot outlive the password change.
+    const updated = await pool.query(
+      `UPDATE users
+          SET password_hash = $1,
+              must_change_password = FALSE,
+              token_version = token_version + 1,
+              updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+        RETURNING id, name, email, created_at, token_version, role, prn,
+                  must_change_password, can_review_recovery`,
+      [passwordHash, req.user.id]
+    )
+
+    const token = jwt.sign(
+      { sub: updated.rows[0].id, ver: updated.rows[0].token_version },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    )
+    setAuthCookie(res, token)
+
+    res.json({
+      message: 'Password updated successfully!',
+      user: toSafeUser(updated.rows[0]),
+    })
+  } catch (error) {
+    console.error('Change password error:', error.message)
+    res.status(500).json({ message: 'Failed to change password' })
   }
 })
 
@@ -538,8 +700,8 @@ function validateRecoveryRequest(body) {
 
 function canViewRecoveryRequest(reqUser, row) {
   if (!row) return false
-  // The admin reviews every request; students only their own.
-  if (isAdminUser(reqUser)) return true
+  // Reviewers see every request; students only their own.
+  if (canReviewRecovery(reqUser)) return true
   return (
     reqUser.id === row.claimant_user_id || reqUser.id === row.lost_owner_id
   )
@@ -601,7 +763,7 @@ app.get('/api/lost-items/:id', async (req, res) => {
   }
 })
 
-app.post('/api/lost-items', requireAuth, async (req, res) => {
+app.post('/api/lost-items', requireAuth, requirePasswordChange, async (req, res) => {
   const errors = validateItem(req.body, 'dateLost')
   if (Object.keys(errors).length > 0) {
     return res.status(400).json({ message: 'Validation failed.', errors })
@@ -627,7 +789,7 @@ app.post('/api/lost-items', requireAuth, async (req, res) => {
   }
 })
 
-app.put('/api/lost-items/:id', requireAuth, async (req, res) => {
+app.put('/api/lost-items/:id', requireAuth, requirePasswordChange, async (req, res) => {
   const errors = validateItem(req.body, 'dateLost')
   if (Object.keys(errors).length > 0) {
     return res.status(400).json({ message: 'Validation failed.', errors })
@@ -669,7 +831,7 @@ app.put('/api/lost-items/:id', requireAuth, async (req, res) => {
   }
 })
 
-app.delete('/api/lost-items/:id', requireAuth, async (req, res) => {
+app.delete('/api/lost-items/:id', requireAuth, requirePasswordChange, async (req, res) => {
   try {
     const { id } = req.params
     if (!Number.isInteger(Number(id)) || Number(id) <= 0) {
@@ -724,7 +886,7 @@ app.get('/api/found-items/:id', async (req, res) => {
   }
 })
 
-app.post('/api/found-items', requireAuth, async (req, res) => {
+app.post('/api/found-items', requireAuth, requirePasswordChange, async (req, res) => {
   const errors = validateItem(req.body, 'dateFound')
   if (Object.keys(errors).length > 0) {
     return res.status(400).json({ message: 'Validation failed.', errors })
@@ -750,7 +912,7 @@ app.post('/api/found-items', requireAuth, async (req, res) => {
   }
 })
 
-app.put('/api/found-items/:id', requireAuth, async (req, res) => {
+app.put('/api/found-items/:id', requireAuth, requirePasswordChange, async (req, res) => {
   const errors = validateItem(req.body, 'dateFound')
   if (Object.keys(errors).length > 0) {
     return res.status(400).json({ message: 'Validation failed.', errors })
@@ -792,7 +954,7 @@ app.put('/api/found-items/:id', requireAuth, async (req, res) => {
   }
 })
 
-app.delete('/api/found-items/:id', requireAuth, async (req, res) => {
+app.delete('/api/found-items/:id', requireAuth, requirePasswordChange, async (req, res) => {
   try {
     const { id } = req.params
     if (!Number.isInteger(Number(id)) || Number(id) <= 0) {
@@ -822,8 +984,9 @@ app.delete('/api/found-items/:id', requireAuth, async (req, res) => {
 
 app.get('/api/recovery-requests', requireAuth, async (req, res) => {
   try {
-    // The admin sees the full review queue; everyone else only their own.
-    const result = isAdminUser(req.user)
+    // Admins and granted staff see the full review queue; everyone else only
+    // sees the requests they created or own.
+    const result = canReviewRecovery(req.user)
       ? await pool.query(
           `${RECOVERY_SELECT}
            ORDER BY rr.created_at DESC, rr.id DESC`
@@ -861,7 +1024,7 @@ app.get('/api/recovery-requests/:id', requireAuth, async (req, res) => {
   }
 })
 
-app.post('/api/recovery-requests', requireAuth, async (req, res) => {
+app.post('/api/recovery-requests', requireAuth, requirePasswordChange, async (req, res) => {
   const errors = validateRecoveryRequest(req.body)
   if (Object.keys(errors).length > 0) {
     return res.status(400).json({ message: 'Validation failed.', errors })
@@ -929,7 +1092,8 @@ app.post('/api/recovery-requests', requireAuth, async (req, res) => {
 app.patch(
   '/api/recovery-requests/:id/status',
   requireAuth,
-  requireAdmin,
+  requirePasswordChange,
+  requireReviewRecovery,
   async (req, res) => {
     try {
       const { id } = req.params
@@ -977,7 +1141,7 @@ app.patch(
 // My reports (authenticated user only)
 // ---------------------------------------------------------------------------
 
-app.get('/api/my-reports', requireAuth, async (req, res) => {
+app.get('/api/my-reports', requireAuth, requirePasswordChange, async (req, res) => {
   try {
     const lost = await pool.query(
       'SELECT * FROM lost_items WHERE user_id = $1 ORDER BY created_at DESC',

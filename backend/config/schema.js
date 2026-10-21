@@ -1,4 +1,9 @@
 const pool = require('./db')
+const {
+  ROLES,
+  ADMIN_EMAIL,
+  STAFF_EMAILS,
+} = require('./roles')
 
 async function ensureColumn(client, table, column, definition) {
   const result = await client.query(
@@ -68,6 +73,40 @@ async function ensureSchema() {
     }
     await ensureColumn(client, 'users', 'updated_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
     await ensureColumn(client, 'users', 'token_version', 'INTEGER NOT NULL DEFAULT 0')
+
+    // Role and permission columns. Every existing row starts as a student;
+    // the admin and any bootstrapped staff accounts are promoted just below.
+    await ensureColumn(client, 'users', 'role', `VARCHAR(20) NOT NULL DEFAULT '${ROLES.STUDENT}'`)
+    await ensureColumn(client, 'users', 'prn', 'VARCHAR(16)')
+    await ensureColumn(client, 'users', 'must_change_password', 'BOOLEAN NOT NULL DEFAULT FALSE')
+    await ensureColumn(client, 'users', 'can_review_recovery', 'BOOLEAN NOT NULL DEFAULT FALSE')
+
+    await client.query(`
+      ALTER TABLE users
+        DROP CONSTRAINT IF EXISTS chk_users_role,
+        ADD CONSTRAINT chk_users_role
+          CHECK (role IN ('student', 'staff', 'admin'))
+    `)
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_users_prn ON users (prn)
+    `)
+
+    // Bootstrap promotions. Guarded by column existence so a very old database
+    // cannot fail the whole migration on this convenience step.
+    const roleCol = await client.query(
+      `SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'users' AND column_name = 'role'`
+    )
+    if (roleCol.rows.length > 0) {
+      const params = [ADMIN_EMAIL]
+      const staff = Array.from(STAFF_EMAILS)
+      const placeholders = staff.map((_, i) => `$${i + 2}`).join(', ')
+      const sql = staff.length
+        ? `UPDATE users SET role = CASE WHEN lower(email) = $1 THEN '${ROLES.ADMIN}' ELSE '${ROLES.STAFF}' END
+             WHERE lower(email) = $1 OR lower(email) IN (${placeholders})`
+        : `UPDATE users SET role = '${ROLES.ADMIN}' WHERE lower(email) = $1`
+      await client.query(sql, staff.length ? params.concat(staff) : params)
+    }
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS lost_items (

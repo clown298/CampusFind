@@ -1,4 +1,4 @@
-import { createContext, useEffect, useState } from "react";
+import { createContext, useCallback, useEffect, useState } from "react";
 import { apiRequest } from "../utils/api";
 
 export const RecoveryRequestContext = createContext();
@@ -8,11 +8,7 @@ function RecoveryRequestProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
 
-  function dismissLoadError() {
-    setLoadError(null);
-  }
-
-  async function fetchRequests() {
+  const fetchRequests = useCallback(async () => {
     try {
       const data = await apiRequest("/api/recovery-requests");
       const requests =
@@ -25,10 +21,12 @@ function RecoveryRequestProvider({ children }) {
         err
       );
       setLoadError(
-        "Could not load recovery requests. Please check your connection and try again."
+        err && err.status === 401
+          ? "Your session has expired. Please log in again to view recovery requests."
+          : "Could not load recovery requests. Please check your connection and try again."
       );
     }
-  }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,14 +40,23 @@ function RecoveryRequestProvider({ children }) {
     return () => {
       cancelled = true;
     };
+  }, [fetchRequests]);
+
+  const dismissLoadError = useCallback(() => {
+    setLoadError(null);
   }, []);
 
-  async function refreshRequests() {
+  const refreshRequests = useCallback(async () => {
     setLoadError(null);
-    await fetchRequests();
-  }
+    setIsLoading(true);
+    try {
+      await fetchRequests();
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fetchRequests]);
 
-  async function createRecoveryRequest(payload) {
+  const createRecoveryRequest = useCallback(async (payload) => {
     const data = await apiRequest("/api/recovery-requests", {
       method: "POST",
       body: payload,
@@ -62,9 +69,9 @@ function RecoveryRequestProvider({ children }) {
     }
     setRecoveryRequests((prev) => [savedRequest, ...prev]);
     return savedRequest;
-  }
+  }, []);
 
-  async function updateRecoveryRequestStatus(id, status) {
+  const updateRecoveryRequestStatus = useCallback(async (id, status) => {
     const data = await apiRequest(`/api/recovery-requests/${id}/status`, {
       method: "PATCH",
       body: { status },
@@ -83,7 +90,7 @@ function RecoveryRequestProvider({ children }) {
       )
     );
     return updatedRequest;
-  }
+  }, []);
 
   return (
     <RecoveryRequestContext.Provider

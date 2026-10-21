@@ -6,9 +6,8 @@ import PageShell from "../components/PageShell";
 import { getItemTimestamp } from "../utils/items";
 import EmptyState from "../components/EmptyState";
 import Button from "../components/Button";
+import LoadingState from "../components/LoadingState";
 import Reveal from "../components/Reveal";
-
-const eyebrow = "GCOEC • Campus Lost & Found";
 
 function LostItemsPage() {
   const { lostItems, deleteLostItem, updateLostItem, isLoading, loadError } =
@@ -55,19 +54,18 @@ function LostItemsPage() {
     return next;
   }, [lostItems, search, category, sort]);
 
-  const hasFilters =
-    search.trim() !== "" || category !== "All";
+  const hasFilters = search.trim() !== "" || category !== "All";
   const showing = filteredItems.length;
   const total = lostItems.length;
   const statusText = hasFilters
     ? `Showing ${showing} of ${total} lost ${total === 1 ? "item" : "items"}`
-    : `${total} lost ${total === 1 ? "item" : "items"}`;
+    : `${total} lost ${total === 1 ? "item" : "items"} registered`;
 
   return (
     <PageShell
-      title="Lost Items"
-      eyebrow={eyebrow}
-      description="Items reported missing across campus. Search by item name, category, or location."
+      title="Lost Items Registry"
+      badgeText="GCOEC Campus"
+      description="Belongings reported misplaced or missing across college facilities. Search by name, category, or location."
       tone="lost"
       action={
         <Button to="/report-lost" variant="lost" className="w-full sm:w-auto">
@@ -83,67 +81,61 @@ function LostItemsPage() {
         sort={sort}
         onSortChange={setSort}
         searchLabel="Search lost items"
-        searchPlaceholder="Search by name, category, or location..."
+        searchPlaceholder="Search by title, department, or category..."
       />
 
       {loadError && (
         <div
-          className="mb-4 rounded-card border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
+          className="mb-6 rounded-card border border-lost/30 bg-lost-tint p-4 text-xs font-medium text-lost"
           role="alert"
         >
-          <p className="font-semibold">Lost items unavailable</p>
+          <p className="font-semibold text-sm">Lost items unavailable</p>
           <p className="mt-1">{loadError}</p>
         </div>
       )}
 
       {isLoading ? (
-        <div
-          className="rounded-card border border-line bg-surface px-5 py-10 text-center sm:px-8"
-          role="status"
-        >
-          <p className="text-sm font-semibold text-mute">
-            Loading lost items…
-          </p>
-        </div>
+        <LoadingState label="Loading lost items registry…" />
       ) : showing === 0 ? (
         total === 0 ? (
           <EmptyState
-            title="No lost items have been reported yet"
-            description="When someone reports a missing belonging, it will appear here for other students to check."
+            title="No lost items currently reported"
+            description="When a missing belonging is logged by a student or staff member, it appears here immediately."
             actionLabel="Report Lost Item"
             actionTo="/report-lost"
             variant="lost"
           />
         ) : (
           <EmptyState
-            title="No lost items found"
-            description="Try changing your search or category, or report a lost item."
+            title="No items matched your query"
+            description="Try adjusting your keywords or category filter, or file a new lost item report."
             actionLabel="Report Lost Item"
             actionTo="/report-lost"
             variant="lost"
           />
         )
       ) : (
-        <Reveal className="min-w-0">
-          <div>
-            <h2 className="sr-only">Lost item listings</h2>
-            <p className="mb-4 text-sm font-medium text-mute" role="status">
-              {statusText}
-            </p>
-            <ul className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredItems.map((item) => (
-                <li key={item.id} className="h-full min-w-0">
-                  <ItemCard
-                    type="lost"
-                    item={item}
-                    onUpdate={updateLostItem}
-                    onDelete={deleteLostItem}
-                  />
-                </li>
-              ))}
-            </ul>
-          </div>
-        </Reveal>
+        <div className="min-w-0">
+          <h2 className="sr-only">Lost item listings</h2>
+          <p
+            className="mb-6 border-b border-line pb-3.5 text-sm font-medium text-ink/80"
+            role="status"
+          >
+            {statusText}
+          </p>
+          <ul className="grid grid-cols-1 items-stretch gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredItems.map((item, index) => (
+              <Reveal as="li" key={item.id} delay={Math.min(index, 5) * 50} className="min-w-0">
+                <ItemCard
+                  type="lost"
+                  item={item}
+                  onUpdate={updateLostItem}
+                  onDelete={deleteLostItem}
+                />
+              </Reveal>
+            ))}
+          </ul>
+        </div>
       )}
     </PageShell>
   );

@@ -3,7 +3,8 @@ import { Navigate, useLocation } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 
 function ProtectedRoute({ children }) {
-  const { isAuthenticated, loading } = useContext(AuthContext);
+  const { isAuthenticated, loading, mustChangePassword } =
+    useContext(AuthContext);
   const location = useLocation();
 
   if (loading) {
@@ -29,6 +30,12 @@ function ProtectedRoute({ children }) {
         state={{ from: { pathname: location.pathname, search: location.search } }}
       />
     );
+  }
+
+  // A provisioned account must set a real password before it can use the app.
+  // The change-password screen is the only page it is allowed to reach.
+  if (mustChangePassword && location.pathname !== "/change-password") {
+    return <Navigate to="/change-password" replace />;
   }
 
   return children;

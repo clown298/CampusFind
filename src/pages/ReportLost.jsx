@@ -1,5 +1,5 @@
 import { useContext, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { LostItemContext } from "../context/LostItemContext";
 import { AuthContext } from "../context/AuthContext";
 import PageShell from "../components/PageShell";
@@ -7,6 +7,11 @@ import Button from "../components/Button";
 import TypeChip from "../components/TypeChip";
 import { LostIcon } from "../components/icons";
 import { MAX_IMAGE_LABEL, prepareImageFile } from "../utils/images";
+import {
+  inputClass as fieldClass,
+  textareaClass,
+} from "../components/fieldStyles";
+import { Spinner } from "../components/LoadingState";
 
 const CATEGORIES = [
   "Electronics",
@@ -57,15 +62,6 @@ function validateForm(data) {
   return errors;
 }
 
-const eyebrow = "GCOEC • Campus Lost & Found";
-
-const fieldClass = (hasError) =>
-  [
-    "w-full min-h-[44px] rounded-control border px-3.5 py-2.5 text-sm text-ink placeholder:text-mute/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-colors duration-150",
-    hasError
-      ? "border-lost bg-lost/5 focus-visible:ring-lost"
-      : "border-line bg-surface hover:border-mute/40",
-  ].join(" ");
 
 function SectionHeading({ number, title, hint, toneClass }) {
   return (
@@ -236,9 +232,9 @@ function ReportLost() {
   if (success) {
     return (
       <PageShell
-        title="Report a lost item"
+        title="Report a Lost Belonging"
         description="Describe the item you lost so the campus community can help you find it."
-        eyebrow={eyebrow}
+        badgeText="GCOEC Campus"
         icon={<TypeChip tone="lost" icon={LostIcon} label="Lost report" />}
         tone="lost"
       >
@@ -287,9 +283,9 @@ function ReportLost() {
 
   return (
     <PageShell
-      title="Report a lost item"
+      title="Report a Lost Belonging"
       description="Describe the item you lost in a few clear details so it is easy for someone who finds it to recognise it."
-      eyebrow={eyebrow}
+      badgeText="GCOEC Campus"
       icon={<TypeChip tone="lost" icon={LostIcon} label="Lost report" />}
       tone="lost"
       action={
@@ -298,7 +294,8 @@ function ReportLost() {
         </Button>
       }
     >
-      <div className="mx-auto w-full max-w-[800px]">
+      <div className="mx-auto grid w-full min-w-0 max-w-[1080px] grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
+        <div className="min-w-0">
         {!isAuthenticated ? (
           <div className="mb-6 rounded-card border border-lost/30 bg-lost/5 p-4 text-sm sm:p-5">
             <p className="font-semibold text-ink">
@@ -348,7 +345,7 @@ function ReportLost() {
 
           {submissionError && (
             <div
-              className="mt-6 rounded-card border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
+              className="animate-alert-in mt-6 rounded-card border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
               role="alert"
             >
               <p className="font-semibold">Submission failed</p>
@@ -462,11 +459,7 @@ function ReportLost() {
                     aria-describedby={
                       errors.description ? "description-error" : undefined
                     }
-                    className={`w-full rounded-control border px-3.5 py-2.5 text-sm leading-relaxed text-ink placeholder:text-mute/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-colors duration-150 resize-y ${
-                      errors.description
-                        ? "border-lost bg-lost/5 focus-visible:ring-lost"
-                        : "border-line bg-surface hover:border-mute/40"
-                    }`}
+                    className={textareaClass(errors.description)}
                   />
                   <p className="mt-1.5 text-xs text-mute">
                     Include distinguishing marks, contents, colours, or anything
@@ -723,13 +716,14 @@ function ReportLost() {
             </section>
           </div>
 
-          <div className="mt-8 flex flex-col-reverse items-stretch gap-3 border-t border-line pt-6 sm:flex-row sm:justify-between">
-            <Link
+          <div className="mt-8 flex flex-col-reverse items-stretch gap-3 border-t border-line pt-6 sm:flex-row sm:justify-end">
+            <Button
               to="/lost-items"
-              className="min-h-[44px] inline-flex items-center justify-center rounded-control px-4 text-sm font-semibold text-ink transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface hover:text-mute"
+              variant="secondary"
+              className="w-full sm:w-auto"
             >
               Cancel
-            </Link>
+            </Button>
             <Button
               type="submit"
               variant="lost"
@@ -739,27 +733,7 @@ function ReportLost() {
             >
               {isLoading ? (
                 <span className="flex items-center justify-center gap-2">
-                  <svg
-                    className="h-4 w-4 animate-spin"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                    />
-                  </svg>
+                  <Spinner className="h-4 w-4" />
                   Submitting...
                 </span>
               ) : (
@@ -768,6 +742,42 @@ function ReportLost() {
             </Button>
           </div>
         </form>
+        </div>
+
+        {/* Guidance side rail — desktop only */}
+        <aside className="hidden lg:block" aria-label="Tips for reporting a lost item">
+          <div className="sticky top-24 space-y-5">
+            <div className="rounded-card border border-line bg-paper p-5">
+              <p className="type-eyebrow-plain font-semibold text-lost">Before you report</p>
+              <ul className="mt-3 space-y-3 text-sm leading-6 text-mute">
+                <li className="flex gap-2.5">
+                  <span
+                    className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-lost"
+                    aria-hidden="true"
+                  />
+                  Ask at the campus lost &amp; found desk first — it may already
+                  be turned in.
+                </li>
+                <li className="flex gap-2.5">
+                  <span
+                    className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-lost"
+                    aria-hidden="true"
+                  />
+                  A clear description with marks and contents helps someone
+                  recognise it.
+                </li>
+                <li className="flex gap-2.5">
+                  <span
+                    className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-lost"
+                    aria-hidden="true"
+                  />
+                  Keep your contact details reachable until the item is back
+                  with you.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </aside>
       </div>
     </PageShell>
   );

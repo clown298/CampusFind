@@ -8,9 +8,9 @@ const ICONS = {
 };
 
 const CHIP_TONES = {
-  lost: "bg-lost/10 text-lost",
-  found: "bg-found/10 text-found",
-  primary: "bg-paper text-ink",
+  lost: "bg-lost/15 text-lost border border-lost/30",
+  found: "bg-found/15 text-found border border-found/30",
+  primary: "bg-frost text-primary border border-line",
 };
 
 function EmptyState({
@@ -23,7 +23,7 @@ function EmptyState({
   const Icon = ICONS[variant] || CampusIcon;
 
   return (
-    <div className="rounded-card border border-line bg-surface px-5 py-12 text-center sm:px-8">
+    <div className="hero-rise rounded-card border border-line bg-surface px-5 py-14 text-center sm:px-8">
       <span
         className={`inline-flex h-12 w-12 items-center justify-center rounded-control ${
           CHIP_TONES[variant] || CHIP_TONES.primary
@@ -35,7 +35,7 @@ function EmptyState({
       <h2 className="type-section mt-5 text-xl text-ink sm:text-2xl">
         {title}
       </h2>
-      <p className="mx-auto mt-2 max-w-lg text-[0.9375rem] leading-6 text-mute">
+      <p className="mx-auto mt-2.5 max-w-lg text-sm leading-relaxed text-mute">
         {description}
       </p>
       {actionLabel && actionTo ? (

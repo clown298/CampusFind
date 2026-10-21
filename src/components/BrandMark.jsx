@@ -1,42 +1,25 @@
-function BrandMark({ size = 26, className = "" }) {
+function BrandMark({ size = 26, tone = "brand", className = "" }) {
+  const stroke = tone === "inverse" ? "#FFFFFF" : "#B85437";
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       width={size}
       height={size}
       viewBox="0 0 32 32"
-      fill="none"
       className={className}
       aria-hidden="true"
+      focusable="false"
     >
-      <rect width="32" height="32" rx="8" fill="currentColor" />
-      <circle
-        cx="14.5"
-        cy="14.5"
-        r="6"
-        stroke="white"
-        strokeWidth="2.4"
-      />
-      <path
-        d="M19 19l4.5 4.5"
-        stroke="white"
-        strokeWidth="2.4"
+      <g
+        fill="none"
+        stroke={stroke}
         strokeLinecap="round"
-      />
-      <path
-        d="M11.8 9.4 13 7.6M8.6 11.6 6.8 10.4"
-        stroke="white"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        opacity="0.7"
-      />
-      <circle
-        cx="14.5"
-        cy="14.5"
-        r="2"
-        stroke="white"
-        strokeWidth="2.6"
-      />
+        strokeLinejoin="round"
+      >
+        <rect x="2.5" y="2.5" width="27" height="27" rx="7" strokeWidth="2.25" />
+        <circle cx="14" cy="14" r="4.5" strokeWidth="2.25" />
+        <path d="m17.5 17.5 4 4" strokeWidth="2.5" />
+      </g>
     </svg>
   );
 }

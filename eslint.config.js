@@ -5,7 +5,14 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores([
+    'dist',
+    // Vendored skill/tooling scripts (Impeccable, UI/UX Pro Max, agents) are
+    // not app source and must not be linted with the app's rules.
+    '.opencode/**',
+    '.agents/**',
+    '.trae/**',
+  ]),
   {
     files: ['**/*.{js,jsx}'],
     extends: [

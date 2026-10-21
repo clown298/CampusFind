@@ -11,6 +11,7 @@ import {
   MAX_PROOF_IMAGE_LABEL,
   prepareImageFile,
 } from "../utils/images";
+import { inputClass, textareaClass } from "./fieldStyles";
 
 const RECOVERY_STATUS_META = {
   pending: { label: "Pending", classes: "border-pending text-pending" },
@@ -196,9 +197,9 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
         <form
           onSubmit={handleSubmit}
           noValidate
-          className="animate-menu-in rounded-control border border-line bg-surface p-4"
+          className="animate-menu-in rounded-card border border-line bg-paper p-4 sm:p-5"
         >
-          <p className="text-sm font-semibold text-ink">
+          <p className="type-card text-base text-ink">
             Request recovery of this item
           </p>
           <p className="mt-1 text-sm leading-6 text-mute">
@@ -230,11 +231,7 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
                     ? `recovery-name-error-${lostItemId}-${foundItemId}`
                     : undefined
                 }
-                className={`w-full min-h-[44px] rounded-control border px-3.5 py-2.5 text-sm text-ink placeholder:text-mute/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-colors duration-150 ${
-                  errors.claimantName
-                    ? "border-lost bg-lost/5 focus-visible:ring-lost"
-                    : "border-line bg-surface hover:border-mute/40"
-                }`}
+                className={inputClass(Boolean(errors.claimantName))}
               />
               {errors.claimantName && (
                 <p
@@ -271,11 +268,7 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
                     ? `recovery-email-error-${lostItemId}-${foundItemId}`
                     : undefined
                 }
-                className={`w-full min-h-[44px] rounded-control border px-3.5 py-2.5 text-sm text-ink placeholder:text-mute/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-colors duration-150 ${
-                  errors.claimantEmail
-                    ? "border-lost bg-lost/5 focus-visible:ring-lost"
-                    : "border-line bg-surface hover:border-mute/40"
-                }`}
+                className={inputClass(Boolean(errors.claimantEmail))}
               />
               {errors.claimantEmail && (
                 <p
@@ -312,11 +305,7 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
                     ? `recovery-phone-error-${lostItemId}-${foundItemId}`
                     : undefined
                 }
-                className={`w-full min-h-[44px] rounded-control border px-3.5 py-2.5 text-sm text-ink placeholder:text-mute/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-colors duration-150 ${
-                  errors.claimantPhone
-                    ? "border-lost bg-lost/5 focus-visible:ring-lost"
-                    : "border-line bg-surface hover:border-mute/40"
-                }`}
+                className={inputClass(Boolean(errors.claimantPhone))}
               />
               {errors.claimantPhone && (
                 <p
@@ -352,11 +341,7 @@ function RecoveryRequestForm({ lostItemId, foundItemId, existingRequest }) {
                     ? `recovery-message-error-${lostItemId}-${foundItemId}`
                     : undefined
                 }
-                className={`w-full rounded-control border px-3.5 py-2.5 text-sm leading-relaxed text-ink placeholder:text-mute/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-colors duration-150 resize-y ${
-                  errors.claimantMessage
-                    ? "border-lost bg-lost/5 focus-visible:ring-lost"
-                    : "border-line bg-surface hover:border-mute/40"
-                }`}
+                className={textareaClass(Boolean(errors.claimantMessage))}
               />
               {errors.claimantMessage && (
                 <p
@@ -517,108 +502,118 @@ function PossibleMatches({
   }
 
   return (
-    <section id="possible-matches" className="mt-10 scroll-mt-24">
-      <div className="flex items-center gap-3">
-        <span
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-canopy/10 text-canopy"
-          aria-hidden="true"
-        >
-          <MatchIcon size={20} />
-        </span>
-        <h2 className="type-section text-2xl text-ink">Possible Matches</h2>
-      </div>
-      <p className="mt-2.5 max-w-2xl text-[0.9375rem] leading-6 text-mute">
-        The following {oppositeLabel} may describe the same physical item.
-        These are suggestions based on name, category, location, date, and
-        description, not confirmations.
-      </p>
-
-      {candidatesLoading ? (
-<div
-        className="mt-4 rounded-card border border-line bg-surface px-5 py-8 text-center"
-        role="status"
-      >
-        <p className="text-sm font-semibold text-mute">
-          Checking for possible matches…
+    <section id="possible-matches" className="mt-12 scroll-mt-24">
+      <div className="border-t border-ink/80 pt-8">
+        <div className="flex items-center gap-3">
+          <span
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-olive-tint text-olive"
+            aria-hidden="true"
+          >
+            <MatchIcon size={20} />
+          </span>
+          <div>
+            <h2 className="type-section text-2xl font-semibold text-ink">
+              Possible Matches
+            </h2>
+          </div>
+        </div>
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-mute">
+          The following {oppositeLabel} may describe the same physical item.
+          These are suggestions based on name, category, location, date, and
+          description, not confirmations.
         </p>
-      </div>
-      ) : candidatesLoadError ? (
-        <div
-          className="mt-4 rounded-card border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
-          role="alert"
-        >
-          <p className="font-semibold">Possible matches unavailable</p>
-          <p className="mt-1">{candidatesLoadError}</p>
-        </div>
-      ) : matches.length === 0 ? (
-        <div className="mt-4 rounded-card border border-line bg-surface px-5 py-8 text-center">
-          <p className="text-sm text-mute">No possible matches found yet.</p>
-        </div>
-      ) : (
-        <ul className="mt-4 space-y-4">
-          {matches.map((match) => {
-            const detailPath =
-              oppositeType === "found"
-                ? `/found-items/${match.item.id}`
-                : `/lost-items/${match.item.id}`;
-            const dateText = formatDisplayDate(
-              getItemDate(match.item, oppositeType)
-            );
-            const { lostItemId, foundItemId, existing } =
-              findExistingRequest(match);
 
-            return (
-              <li
-                key={match.item.id}
-                className="rounded-card border border-line bg-surface p-4 transition-colors duration-200 hover:border-canopy/40"
-              >
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <Link
-                      to={detailPath}
-                      className="type-card -m-1 inline-block break-words rounded-control p-1 text-xl text-ink no-underline underline-offset-4 transition-colors duration-200 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-                      aria-label={`View ${oppositeType} item: ${getItemName(match.item)}`}
-                    >
-                      {getItemName(match.item)}
-                    </Link>
+        {candidatesLoading ? (
+          <div
+            className="mt-5 rounded-card border border-line bg-surface px-5 py-8 text-center"
+            role="status"
+          >
+            <p className="text-sm font-semibold text-mute">
+              Checking for possible matches…
+            </p>
+          </div>
+        ) : candidatesLoadError ? (
+          <div
+            className="mt-5 rounded-card border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
+            role="alert"
+          >
+            <p className="font-semibold">Possible matches unavailable</p>
+            <p className="mt-1">{candidatesLoadError}</p>
+          </div>
+        ) : matches.length === 0 ? (
+          <div className="mt-5 rounded-card border border-line bg-surface px-5 py-10 text-center">
+            <p className="text-sm text-mute">No possible matches found yet.</p>
+          </div>
+        ) : (
+          <ul className="mt-5 space-y-4">
+            {matches.map((match) => {
+              const detailPath =
+                oppositeType === "found"
+                  ? `/found-items/${match.item.id}`
+                  : `/lost-items/${match.item.id}`;
+              const dateText = formatDisplayDate(
+                getItemDate(match.item, oppositeType)
+              );
+              const { lostItemId, foundItemId, existing } =
+                findExistingRequest(match);
 
-                    <p className="mt-2 text-sm text-mute">
-                      {match.item.category} · {match.item.location} · {dateText}
-                    </p>
+              return (
+                <li
+                  key={match.item.id}
+                  className="rounded-card border border-line bg-surface p-4 transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-sm hover:shadow-black/5 hover:border-olive/40 sm:p-5"
+                >
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        to={detailPath}
+                        className="type-card -m-1 inline-block break-words rounded-control p-1 text-xl text-ink no-underline underline-offset-4 transition-colors duration-200 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+                        aria-label={`View ${oppositeType} item: ${getItemName(match.item)}`}
+                      >
+                        {getItemName(match.item)}
+                      </Link>
 
-                    {match.reasons.length > 0 ? (
-                      <p className="mt-3 text-sm font-medium leading-6 text-ink">
-                        {match.reasons.join(" · ")}
+                      <p className="mt-2 text-sm text-mute">
+                        {match.item.category} · {match.item.location} · {dateText}
                       </p>
-                    ) : null}
+
+                      {match.reasons.length > 0 ? (
+                        <p className="mt-3 text-sm font-medium leading-6 text-ink">
+                          {match.reasons.join(" · ")}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="shrink-0 sm:pl-4">
+                      <p className="type-display text-3xl leading-none text-olive">
+                        {match.score}
+                        <span className="text-base font-semibold">%</span>
+                      </p>
+                      <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-mute">
+                        match
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="shrink-0 sm:pl-4">
-                    <p className="inline-flex items-center rounded-full border border-line bg-surface px-2.5 py-1 text-sm font-semibold text-ink">
-                      {match.score}% match
-                    </p>
+                  <div className="mt-4 flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap">
+                    <Button
+                      to={detailPath}
+                      variant="secondary"
+                      className="w-full sm:w-auto"
+                    >
+                      View item
+                    </Button>
+                    <RecoveryRequestForm
+                      lostItemId={lostItemId}
+                      foundItemId={foundItemId}
+                      existingRequest={existing}
+                    />
                   </div>
-                </div>
-
-                <div className="mt-4 flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap">
-                  <Button
-                    to={detailPath}
-                    variant="secondary"
-                    className="w-full sm:w-auto"
-                  >
-                    View item
-                  </Button>
-                  <RecoveryRequestForm
-                    lostItemId={lostItemId}
-                    foundItemId={foundItemId}
-                    existingRequest={existing}
-                  />
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
     </section>
   );
 }

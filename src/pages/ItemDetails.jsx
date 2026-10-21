@@ -7,12 +7,17 @@ import PageShell from "../components/PageShell";
 import Button from "../components/Button";
 import EmptyState from "../components/EmptyState";
 import PossibleMatches from "../components/PossibleMatches";
+import LoadingState from "../components/LoadingState";
 import TypeChip from "../components/TypeChip";
 import ItemImage from "../components/ItemImage";
 import Reveal from "../components/Reveal";
 import { LostIcon, FoundIcon, PinIcon, CalendarIcon } from "../components/icons";
 import { formatDisplayDate, getItemName, getItemDate } from "../utils/items";
 import { MAX_IMAGE_LABEL, prepareImageFile } from "../utils/images";
+import {
+  inputClass as fieldClass,
+  textareaClass,
+} from "../components/fieldStyles";
 
 const CATEGORIES = [
   "Electronics",
@@ -95,14 +100,6 @@ function ArrowLeftIcon({ className = "" }) {
     </svg>
   );
 }
-
-const fieldClass = (hasError) =>
-  [
-    "w-full min-h-[44px] rounded-control border px-3.5 py-2.5 text-sm text-ink placeholder:text-mute/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-colors duration-150",
-    hasError
-      ? "border-lost bg-lost/5 focus-visible:ring-lost"
-      : "border-line bg-surface hover:border-mute/40",
-  ].join(" ");
 
 function ItemDetails({ type }) {
   const isFound = type === "found";
@@ -299,14 +296,10 @@ function ItemDetails({ type }) {
       <PageShell
         title={`${statusLabel} Item Details`}
         description={`View the full details of a ${statusLabel.toLowerCase()} item reported on campus.`}
+        tone={isFound ? "found" : "lost"}
       >
-        <div
-          className="mx-auto w-full max-w-3xl rounded-card border border-line bg-surface px-5 py-10 text-center sm:px-8"
-          role="status"
-        >
-          <p className="text-sm font-semibold text-mute">
-            Loading {statusLabel.toLowerCase()} item…
-          </p>
+        <div className="mx-auto w-full max-w-3xl">
+          <LoadingState label={`Loading ${statusLabel.toLowerCase()} item…`} />
         </div>
       </PageShell>
     );
@@ -373,7 +366,7 @@ function ItemDetails({ type }) {
 
           {actionError && (
             <div
-              className="mt-4 rounded-card border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
+              className="animate-alert-in mt-4 rounded-card border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
               role="alert"
             >
               <p className="font-semibold">Something went wrong</p>
@@ -473,11 +466,7 @@ function ItemDetails({ type }) {
                 aria-describedby={
                   errors.description ? "edit-description-error" : undefined
                 }
-                className={`w-full rounded-control border px-3.5 py-2.5 text-sm leading-relaxed text-ink placeholder:text-mute/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface transition-colors duration-150 resize-y ${
-                  errors.description
-                    ? "border-lost bg-lost/5 focus-visible:ring-lost"
-                    : "border-line bg-surface hover:border-mute/40"
-                }`}
+                className={textareaClass(errors.description)}
               />
               {errors.description && (
                 <p
@@ -704,7 +693,7 @@ function ItemDetails({ type }) {
             <article className="mt-6 rounded-card border border-line bg-surface">
               {actionError && (
                 <div
-                  className="m-5 rounded-card border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
+                  className="animate-alert-in m-5 rounded-card border border-lost/30 bg-lost/10 p-4 text-sm text-lost"
                   role="alert"
                 >
                   <p className="font-semibold">Something went wrong</p>
@@ -828,7 +817,7 @@ function ItemDetails({ type }) {
               <div className="border-t border-line p-5 sm:p-6">
                 {canManage && confirmingDelete ? (
                   <div
-                    className="rounded-card border border-line bg-paper/50 p-5"
+                    className="animate-alert-in rounded-card border border-line bg-paper/50 p-5"
                     role="group"
                     aria-label="Confirm delete"
                   >
